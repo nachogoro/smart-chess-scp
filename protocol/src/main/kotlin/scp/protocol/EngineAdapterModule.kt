@@ -6,7 +6,7 @@ interface EngineAdapterModule {
     suspend fun getCapabilities(): Result<EngineError, EngineCapabilities>
     suspend fun configure(settings: Map<String, Any>): Result<EngineError, Unit>
     suspend fun getBestMove(params: GetBestMoveParams): Result<EngineError, BestMoveResult>
-    suspend fun stop(): Result<EngineError, StopResult>
+    suspend fun stop(): Result<EngineError, Unit>
     suspend fun newGame(): Result<EngineError, Unit>
 
     val errors: SharedFlow<EngineErrorEvent>
@@ -31,8 +31,6 @@ data class BestMoveResult(
     val depth: Int? = null,
     val pv: List<String>? = null,
 )
-
-data class StopResult(val move: String)
 
 sealed class EngineError(val code: String, val message: String) {
     class EngineCrashed(message: String = "Engine crashed") : EngineError("ENGINE_CRASHED", message)

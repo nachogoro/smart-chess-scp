@@ -21,7 +21,7 @@ class StockfishAdapter : EngineAdapterModule {
         TODO("Not yet implemented")
     }
 
-    override suspend fun stop(): Result<EngineError, StopResult> {
+    override suspend fun stop(): Result<EngineError, Unit> {
         TODO("Not yet implemented")
     }
 
