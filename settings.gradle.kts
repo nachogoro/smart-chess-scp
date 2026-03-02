@@ -7,3 +7,5 @@ include(":engine-remote-stockfish")
 include(":remote-lichess")
 include(":orchestrator")
 include(":board-fake")
+
+includeBuild("../../simple-chess-kotlin")
