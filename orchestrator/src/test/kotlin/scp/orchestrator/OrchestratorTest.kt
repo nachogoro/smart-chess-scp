@@ -33,8 +33,8 @@ class OrchestratorTest {
         board = board,
         gameController = gc,
         ui = ui,
-        engine = if (withEngine) engine else null,
-        remote = if (withRemote) remote else null,
+        engines = if (withEngine) listOf(engine) else emptyList(),
+        remotes = if (withRemote) listOf(remote) else emptyList(),
     )
 
     private fun CoroutineScope.launchOrchestrator(orchestrator: Orchestrator): Job {

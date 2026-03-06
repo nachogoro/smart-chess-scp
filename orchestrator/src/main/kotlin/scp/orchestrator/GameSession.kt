@@ -8,4 +8,6 @@ data class GameSession(
     val boardLevel: BoardCapabilityLevel,
     val playerColor: Color? = null,
     val timeControl: TimeControl? = null,
+    val engine: EngineAdapterModule? = null,
+    val remote: RemoteAdapterModule? = null,
 )
