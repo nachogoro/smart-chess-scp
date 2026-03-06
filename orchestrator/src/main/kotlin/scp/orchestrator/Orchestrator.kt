@@ -28,6 +28,7 @@ class Orchestrator(
         for (event in eventChannel) {
             handleEvent(event)
         }
+        coroutineContext.cancelChildren()
     }
 
     fun stop() {

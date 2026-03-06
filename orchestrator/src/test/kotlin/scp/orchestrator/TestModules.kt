@@ -220,6 +220,7 @@ class FakeEngineModule : EngineAdapterModule {
     override val errors: SharedFlow<EngineErrorEvent> = _errors
 
     var capabilities = EngineCapabilities(name = "FakeEngine", author = "Test", parameters = emptyList())
+    var capabilitiesFail: EngineError? = null
     var configureFail: EngineError? = null
     var bestMoveResponse: Result<EngineError, BestMoveResult> =
         Result.Success(BestMoveResult(move = "e7e5", score = null, depth = null, pv = null))
@@ -228,6 +229,7 @@ class FakeEngineModule : EngineAdapterModule {
     var lastBestMoveParams: GetBestMoveParams? = null
 
     override suspend fun getCapabilities(): Result<EngineError, EngineCapabilities> {
+        capabilitiesFail?.let { return Result.Failure(it) }
         return Result.Success(capabilities)
     }
 
@@ -273,6 +275,7 @@ class FakeRemoteModule : RemoteAdapterModule {
         platform = "FakePlatform", features = emptyList(),
         parameters = emptyList(), seekParameters = emptyList(),
     )
+    var capabilitiesFail: RemoteError? = null
     var configureFail: RemoteError? = null
     var configureResponse = ConfigureResult(user = RemoteUser("testuser", 1500))
     var seekFail: RemoteError? = null
@@ -285,6 +288,7 @@ class FakeRemoteModule : RemoteAdapterModule {
     var disconnectCalled = false
 
     override suspend fun getCapabilities(): Result<RemoteError, RemoteCapabilities> {
+        capabilitiesFail?.let { return Result.Failure(it) }
         return Result.Success(capabilities)
     }
 

@@ -12,145 +12,166 @@ class MoveInferenceTest {
 
     private val startFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
-    // Helper: make a move in the chess library and return the resulting FEN
     private fun fenAfterMove(fen: String, uci: String): String {
         val game = Game.fromFen(fen).getOrThrow()
         val move = game.availableMoves.first { moveToUci(it) == uci }
         return game.makeMove(move).getOrThrow().currentPosition.fen
     }
 
-    // --- Standard moves at FULL level ---
-
-    @Test
-    fun `infer e2e4 from starting position at FULL level`() {
-        val afterFen = fenAfterMove(startFen, "e2e4")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.FULL)
+    private fun assertSingleMove(fen: String, uci: String, level: BoardCapabilityLevel) {
+        val afterFen = fenAfterMove(fen, uci)
+        val boardState = boardStateFromFen(afterFen, level)
+        val result = inferMove(fen, boardState, level)
         assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e2e4", result.uci)
+        assertEquals(uci, result.uci)
     }
 
-    @Test
-    fun `infer g1f3 knight move at FULL level`() {
-        val afterFen = fenAfterMove(startFen, "g1f3")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("g1f3", result.uci)
-    }
-
-    // --- Standard moves at COLOR level ---
+    // -----------------------------------------------------------------------
+    // Regular pawn move
+    // -----------------------------------------------------------------------
 
     @Test
-    fun `infer e2e4 at COLOR level`() {
-        val afterFen = fenAfterMove(startFen, "e2e4")
+    fun `pawn move at FULL level`() = assertSingleMove(startFen, "e2e4", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `pawn move at COLOR level`() = assertSingleMove(startFen, "e2e4", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `pawn move at OCCUPANCY level`() = assertSingleMove(startFen, "e2e4", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // Regular piece move
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `knight move at FULL level`() = assertSingleMove(startFen, "g1f3", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `knight move at COLOR level`() = assertSingleMove(startFen, "g1f3", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `knight move at OCCUPANCY level`() = assertSingleMove(startFen, "g1f3", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // En passant
+    // -----------------------------------------------------------------------
+
+    // White pawn on e5, black just played d7d5
+    private val enPassantFen = "rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"
+
+    @Test
+    fun `en passant at FULL level`() = assertSingleMove(enPassantFen, "e5d6", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `en passant at COLOR level`() = assertSingleMove(enPassantFen, "e5d6", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `en passant at OCCUPANCY level`() = assertSingleMove(enPassantFen, "e5d6", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // Kingside castling
+    // -----------------------------------------------------------------------
+
+    // White can castle kingside (f1 and g1 clear, king and rook unmoved)
+    private val kingsideCastleFen = "rnbqkbnr/pppppppp/8/8/8/5NP1/PPPPPPBP/RNBQK2R w KQkq - 2 3"
+
+    @Test
+    fun `kingside castling at FULL level`() = assertSingleMove(kingsideCastleFen, "e1g1", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `kingside castling at COLOR level`() = assertSingleMove(kingsideCastleFen, "e1g1", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `kingside castling at OCCUPANCY level`() = assertSingleMove(kingsideCastleFen, "e1g1", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // Queenside castling
+    // -----------------------------------------------------------------------
+
+    // White can castle queenside (b1, c1, d1 clear, king and rook unmoved)
+    private val queensideCastleFen = "rnbqkbnr/pppppppp/8/8/8/2NQB3/PPPPPPPP/R3KBNR w KQkq - 4 4"
+
+    @Test
+    fun `queenside castling at FULL level`() = assertSingleMove(queensideCastleFen, "e1c1", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `queenside castling at COLOR level`() = assertSingleMove(queensideCastleFen, "e1c1", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `queenside castling at OCCUPANCY level`() = assertSingleMove(queensideCastleFen, "e1c1", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // Capture
+    // -----------------------------------------------------------------------
+
+    // Italian Game — white bishop captures on f7
+    private val captureFen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
+
+    @Test
+    fun `capture at FULL level`() = assertSingleMove(captureFen, "c4f7", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `capture at COLOR level`() = assertSingleMove(captureFen, "c4f7", BoardCapabilityLevel.COLOR)
+
+    @Test
+    fun `capture at OCCUPANCY level`() = assertSingleMove(captureFen, "c4f7", BoardCapabilityLevel.OCCUPANCY)
+
+    // -----------------------------------------------------------------------
+    // Promotion
+    // -----------------------------------------------------------------------
+
+    // White pawn on e7, only kings on the board
+    private val promotionFen = "6k1/4P3/8/8/8/8/8/4K3 w - - 0 1"
+
+    @Test
+    fun `promotion to queen at FULL level resolves to SingleMove`() =
+        assertSingleMove(promotionFen, "e7e8q", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `promotion to knight at FULL level resolves to SingleMove`() =
+        assertSingleMove(promotionFen, "e7e8n", BoardCapabilityLevel.FULL)
+
+    @Test
+    fun `promotion at COLOR level returns NeedsPromotion`() {
+        val afterFen = fenAfterMove(promotionFen, "e7e8q")
         val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.COLOR)
-
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.COLOR)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e2e4", result.uci)
-    }
-
-    // --- Standard moves at OCCUPANCY level ---
-
-    @Test
-    fun `infer e2e4 at OCCUPANCY level`() {
-        val afterFen = fenAfterMove(startFen, "e2e4")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.OCCUPANCY)
-
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.OCCUPANCY)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e2e4", result.uci)
-    }
-
-    // --- Castling ---
-
-    @Test
-    fun `infer kingside castling at FULL level`() {
-        // Position where white can castle kingside
-        val fen = "rnbqkbnr/pppppppp/8/8/8/5NP1/PPPPPPBP/RNBQK2R w KQkq - 2 3"
-        val afterFen = fenAfterMove(fen, "e1g1")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e1g1", result.uci)
-    }
-
-    // --- En passant ---
-
-    @Test
-    fun `infer en passant capture at FULL level`() {
-        // White pawn on e5, black just played d7d5
-        val fen = "rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3"
-        val afterFen = fenAfterMove(fen, "e5d6")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e5d6", result.uci)
-    }
-
-    // --- Promotion ---
-
-    @Test
-    fun `infer promotion with specific piece at FULL level`() {
-        // White pawn on e7 about to promote
-        val fen = "6k1/4P3/8/8/8/8/8/4K3 w - - 0 1"
-        val afterFen = fenAfterMove(fen, "e7e8q")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e7e8q", result.uci)
-    }
-
-    @Test
-    fun `infer promotion to knight at FULL level`() {
-        val fen = "6k1/4P3/8/8/8/8/8/4K3 w - - 0 1"
-        val afterFen = fenAfterMove(fen, "e7e8n")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("e7e8n", result.uci)
+        val result = inferMove(promotionFen, boardState, BoardCapabilityLevel.COLOR)
+        assertIs<InferenceOutcome.NeedsPromotion>(result)
+        assertEquals("e7e8", result.fromTo)
     }
 
     @Test
     fun `promotion at OCCUPANCY level returns NeedsPromotion`() {
-        val fen = "6k1/4P3/8/8/8/8/8/4K3 w - - 0 1"
-        // At occupancy level, all 4 promotion pieces look the same
-        val afterFen = fenAfterMove(fen, "e7e8q")
+        val afterFen = fenAfterMove(promotionFen, "e7e8q")
         val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.OCCUPANCY)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.OCCUPANCY)
+        val result = inferMove(promotionFen, boardState, BoardCapabilityLevel.OCCUPANCY)
         assertIs<InferenceOutcome.NeedsPromotion>(result)
         assertEquals("e7e8", result.fromTo)
     }
 
-    @Test
-    fun `promotion at COLOR level returns NeedsPromotion`() {
-        val fen = "6k1/4P3/8/8/8/8/8/4K3 w - - 0 1"
-        val afterFen = fenAfterMove(fen, "e7e8q")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.COLOR)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.COLOR)
-        assertIs<InferenceOutcome.NeedsPromotion>(result)
-        assertEquals("e7e8", result.fromTo)
-    }
-
-    // --- Desync / NoMatch ---
+    // -----------------------------------------------------------------------
+    // Invalid move (NoMatch)
+    // -----------------------------------------------------------------------
 
     @Test
-    fun `no matching move returns NoMatch`() {
-        // Board state doesn't correspond to any legal move
+    fun `no matching move at FULL level returns NoMatch`() {
+        // Board unchanged from start — no legal move produces the starting position
         val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
-
-        // Pass the starting FEN as both the current position and the board state —
-        // no legal move results in the same position
         val result = inferMove(startFen, boardState, BoardCapabilityLevel.FULL)
+        assertIs<InferenceOutcome.NoMatch>(result)
+    }
+
+    @Test
+    fun `no matching move at COLOR level returns NoMatch`() {
+        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.COLOR)
+        val result = inferMove(startFen, boardState, BoardCapabilityLevel.COLOR)
+        assertIs<InferenceOutcome.NoMatch>(result)
+    }
+
+    @Test
+    fun `no matching move at OCCUPANCY level returns NoMatch`() {
+        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.OCCUPANCY)
+        val result = inferMove(startFen, boardState, BoardCapabilityLevel.OCCUPANCY)
         assertIs<InferenceOutcome.NoMatch>(result)
     }
 
@@ -161,51 +182,18 @@ class MoveInferenceTest {
         assertIs<InferenceOutcome.NoMatch>(result)
     }
 
-    // --- Capture ---
-
-    @Test
-    fun `infer capture at FULL level`() {
-        // Italian Game position — white bishop can capture on f7
-        val fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
-        // Check if Bxf7+ is available, if not use a different capture
-        val game = Game.fromFen(fen).getOrThrow()
-        val captureMove = game.availableMoves.firstOrNull { moveToUci(it) == "c4f7" }
-        if (captureMove != null) {
-            val afterFen = fenAfterMove(fen, "c4f7")
-            val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-            val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-            assertIs<InferenceOutcome.SingleMove>(result)
-            assertEquals("c4f7", result.uci)
-        }
-    }
-
-    // --- Midgame position ---
-
-    @Test
-    fun `infer move in midgame position at FULL level`() {
-        // After 1.e4 e5 2.Nf3
-        val fen = "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
-        val afterFen = fenAfterMove(fen, "b8c6")
-        val boardState = boardStateFromFen(afterFen, BoardCapabilityLevel.FULL)
-
-        val result = inferMove(fen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.SingleMove>(result)
-        assertEquals("b8c6", result.uci)
-    }
-
-    // --- boardStateFromFen helper ---
+    // -----------------------------------------------------------------------
+    // boardStateFromFen helper
+    // -----------------------------------------------------------------------
 
     @Test
     fun `boardStateFromFen produces correct FULL state`() {
         val state = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
-        // e1 should be white king
         val e1 = state.squares["e1"]
         assertIs<SquareState.OccupiedByPiece>(e1)
         assertEquals(scp.protocol.PieceType.KING, e1.piece.type)
         assertEquals(scp.protocol.Color.WHITE, e1.piece.color)
 
-        // e4 should be empty
         val e4 = state.squares["e4"]
         assertIs<SquareState.Empty>(e4)
     }
