@@ -352,11 +352,10 @@ class MoveHandlingTest {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        ui.emitDrawClaimRequested(gameId, DrawClaimReason.THREEFOLD_REPETITION)
+        ui.emitDrawClaimRequested(gameId)
 
         assertNotNull(gc.lastDrawClaim)
-        assertEquals(gameId, gc.lastDrawClaim!!.first)
-        assertEquals(DrawClaimReason.THREEFOLD_REPETITION, gc.lastDrawClaim!!.second)
+        assertEquals(gameId, gc.lastDrawClaim)
 
         orchestrator.stop()
     }

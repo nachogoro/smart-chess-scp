@@ -41,7 +41,7 @@ class Orchestrator(
         launch { ui.moveReady.collect { eventChannel.send(OrchestratorEvent.MoveReady(it.gameId)) } }
         launch { ui.resignRequested.collect { eventChannel.send(OrchestratorEvent.ResignRequested(it.gameId)) } }
         launch { ui.drawOfferRequested.collect { eventChannel.send(OrchestratorEvent.DrawOfferRequested(it.gameId)) } }
-        launch { ui.drawClaimRequested.collect { eventChannel.send(OrchestratorEvent.DrawClaimRequested(it.gameId, it.reason)) } }
+        launch { ui.drawClaimRequested.collect { eventChannel.send(OrchestratorEvent.DrawClaimRequested(it.gameId)) } }
         launch { ui.abortRequested.collect { eventChannel.send(OrchestratorEvent.AbortRequested(it.gameId)) } }
 
         // Game Controller events
@@ -104,7 +104,7 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.DrawClaimRequested -> {
-                    gameController.claimDraw(event.gameId, event.reason)
+                    gameController.claimDraw(event.gameId)
                     return
                 }
                 is OrchestratorEvent.BoardError -> {

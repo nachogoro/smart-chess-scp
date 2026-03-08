@@ -53,8 +53,6 @@ enum class PromotionPiece(val uci: String) {
     }
 }
 
-enum class DrawClaimReason { THREEFOLD_REPETITION, FIFTY_MOVES, INSUFFICIENT_MATERIAL }
-
 data class Score(val type: ScoreType, val value: Int)
 
 enum class ScoreType { CP, MATE }

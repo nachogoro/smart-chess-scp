@@ -48,7 +48,7 @@ class FakeGameControllerModule : GameControllerModule {
     var lastResign: Pair<String, Color>? = null
     var lastDrawOffer: Pair<String, Color>? = null
     var lastDrawResponse: Pair<String, Boolean>? = null
-    var lastDrawClaim: Pair<String, DrawClaimReason>? = null
+    var lastDrawClaim: String? = null
     var lastAbort: String? = null
     var lastSetResult: SetResultParams? = null
 
@@ -109,8 +109,8 @@ class FakeGameControllerModule : GameControllerModule {
         return Result.Success(Unit)
     }
 
-    override suspend fun claimDraw(gameId: String, reason: DrawClaimReason): Result<GameError, Unit> {
-        lastDrawClaim = gameId to reason
+    override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+        lastDrawClaim = gameId
         return Result.Success(Unit)
     }
 
@@ -206,8 +206,8 @@ class FakeUIModule : UIModule {
     suspend fun emitMoveReady(gameId: String) = _moveReady.emit(MoveReadyEvent(gameId))
     suspend fun emitResignRequested(gameId: String) = _resignRequested.emit(ResignRequestedEvent(gameId))
     suspend fun emitDrawOfferRequested(gameId: String) = _drawOfferRequested.emit(DrawOfferRequestedEvent(gameId))
-    suspend fun emitDrawClaimRequested(gameId: String, reason: DrawClaimReason) =
-        _drawClaimRequested.emit(DrawClaimRequestedEvent(gameId, reason))
+    suspend fun emitDrawClaimRequested(gameId: String) =
+        _drawClaimRequested.emit(DrawClaimRequestedEvent(gameId))
     suspend fun emitAbortRequested(gameId: String) = _abortRequested.emit(AbortRequestedEvent(gameId))
 }
 

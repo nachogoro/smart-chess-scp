@@ -9,7 +9,7 @@ interface GameControllerModule {
     suspend fun resign(gameId: String, color: Color): Result<GameError, Unit>
     suspend fun offerDraw(gameId: String, color: Color): Result<GameError, Unit>
     suspend fun respondDraw(gameId: String, accept: Boolean): Result<GameError, Unit>
-    suspend fun claimDraw(gameId: String, reason: DrawClaimReason): Result<GameError, Unit>
+    suspend fun claimDraw(gameId: String): Result<GameError, Unit>
     suspend fun abort(gameId: String): Result<GameError, Unit>
     suspend fun getHistory(gameId: String): Result<GameError, GameHistory>
     suspend fun setResult(params: SetResultParams): Result<GameError, Unit>
@@ -75,6 +75,7 @@ sealed class GameError(val code: String, val message: String) {
     class GameOver(message: String = "Game is over") : GameError("GAME_OVER", message)
     class NotYourTurn(message: String = "Not your turn") : GameError("NOT_YOUR_TURN", message)
     class InvalidClaim(message: String = "Invalid draw claim") : GameError("INVALID_CLAIM", message)
+    class NoDrawOffer(message: String = "No draw offer to respond to") : GameError("NO_DRAW_OFFER", message)
     class ExternalAuthority(message: String = "Draw claims not allowed in external authority mode") : GameError("EXTERNAL_AUTHORITY", message)
     class InvalidAuthority(message: String = "Game was not created with external authority") : GameError("INVALID_AUTHORITY", message)
 }

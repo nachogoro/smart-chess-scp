@@ -80,6 +80,6 @@ data class ResignRequestedEvent(val gameId: String)
 
 data class DrawOfferRequestedEvent(val gameId: String)
 
-data class DrawClaimRequestedEvent(val gameId: String, val reason: DrawClaimReason)
+data class DrawClaimRequestedEvent(val gameId: String)
 
 data class AbortRequestedEvent(val gameId: String)
