@@ -41,7 +41,6 @@ data class GameStartedEvent(
 
 data class OpponentMoveEvent(
     val move: String,
-    val fen: String,
     val clocks: Clocks?,
 )
 

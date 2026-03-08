@@ -238,8 +238,7 @@ class MoveHandlingTest {
 
         assertIs<OrchestratorState.AwaitingOpponentMove>(orchestrator.state)
 
-        val afterFen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
-        remote.emitOpponentMove(OpponentMoveEvent(move = "e2e4", fen = afterFen, clocks = null))
+        remote.emitOpponentMove(OpponentMoveEvent(move = "e2e4", clocks = null))
 
         assertNotNull(gc.lastSubmittedMove)
         assertEquals("e2e4", gc.lastSubmittedMove!!.move)
