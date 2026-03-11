@@ -10,6 +10,7 @@ subprojects {
 
     repositories {
         mavenCentral()
+        google()
     }
 
     configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {

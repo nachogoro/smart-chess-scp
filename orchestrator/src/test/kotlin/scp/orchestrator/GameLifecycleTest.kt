@@ -259,4 +259,139 @@ class GameLifecycleTest {
 
         orchestrator.stop()
     }
+
+    // -----------------------------------------------------------------------
+    // Game summary notification
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `game ended notifies UI with summary containing result and reason`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1-0", reason = "checkmate", fen = "final-fen"))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(gameId, summary.gameId)
+        assertEquals("1-0", summary.result)
+        assertEquals("checkmate", summary.reason)
+        assertEquals(GameMode.LOCAL, summary.mode)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `game summary includes player names from local game`() = runTest(UnconfinedTestDispatcher()) {
+        ui.configureLocalGameResponse = Result.Success(
+            LocalGameConfig(whiteName = "Alice", blackName = "Bob", timeControl = null)
+        )
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "0-1", reason = "resignation", fen = ""))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals("Alice", summary.whiteName)
+        assertEquals("Bob", summary.blackName)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `game summary includes move history`() = runTest(UnconfinedTestDispatcher()) {
+        // Use a game controller that returns history
+        val historyGc = object : FakeGameControllerModule() {
+            override suspend fun getHistory(gameId: String): Result<GameError, GameHistory> {
+                return Result.Success(GameHistory(listOf(
+                    GameHistoryMove(
+                        move = "e2e4", san = "e4",
+                        fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+                        whiteMs = null, blackMs = null, timestamp = "2026-01-01T00:00:00Z",
+                    ),
+                )))
+            }
+        }
+        val orchestrator = Orchestrator(
+            board = board, gameController = historyGc, ui = ui,
+        )
+        launchOrchestrator(orchestrator)
+        ui.emitNewGameRequested()
+        val gameId = orchestrator.session!!.gameId
+
+        historyGc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1/2-1/2", reason = "stalemate", fen = ""))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(1, summary.moves.size)
+        assertEquals("e2e4", summary.moves[0].move)
+        assertEquals("e4", summary.moves[0].san)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `abort notifies UI with summary`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        ui.emitAbortRequested(gameId)
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(gameId, summary.gameId)
+        assertEquals("*", summary.result)
+        assertEquals("aborted", summary.reason)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `remote game ended notifies UI with summary`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startRemoteGame(Color.WHITE)
+        val gameId = orchestrator.session!!.gameId
+
+        remote.emitGameEnded(RemoteGameEndedEvent(result = "0-1", reason = "resign"))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(gameId, summary.gameId)
+        assertEquals("0-1", summary.result)
+        assertEquals("resign", summary.reason)
+        assertEquals(GameMode.REMOTE, summary.mode)
+        assertEquals(Color.WHITE, summary.playerColor)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `engine game ended notifies UI with summary`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+        val gameId = orchestrator.session!!.gameId
+
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1-0", reason = "checkmate", fen = ""))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(GameMode.ENGINE, summary.mode)
+        assertEquals(Color.WHITE, summary.playerColor)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `flag fall notifies UI with summary`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        gc.emitFlagFall(FlagFallEvent(gameId = gameId, color = Color.WHITE))
+
+        val summary = ui.lastGameSummary
+        assertNotNull(summary)
+        assertEquals(gameId, summary.gameId)
+        assertEquals("timeout", summary.reason)
+
+        orchestrator.stop()
+    }
 }

@@ -347,12 +347,13 @@ class MoveHandlingTest {
     // -----------------------------------------------------------------------
 
     @Test
-    fun `draw claim in local game calls game controller`() = runTest(UnconfinedTestDispatcher()) {
+    fun `draw request tries claim first`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        ui.emitDrawClaimRequested(gameId)
+        ui.emitDrawRequested(gameId)
 
+        // claimDraw is always attempted first
         assertNotNull(gc.lastDrawClaim)
         assertEquals(gameId, gc.lastDrawClaim)
 
@@ -360,25 +361,77 @@ class MoveHandlingTest {
     }
 
     @Test
-    fun `draw offer in local game calls game controller`() = runTest(UnconfinedTestDispatcher()) {
-        val orchestrator = startLocalGame()
+    fun `draw request offers draw in local game when claim fails`() = runTest(UnconfinedTestDispatcher()) {
+        // Use a custom GC that rejects claims
+        val claimRejectingGc = object : FakeGameControllerModule() {
+            override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+                lastDrawClaim = gameId
+                return Result.Failure(GameError.InvalidClaim())
+            }
+        }
+        gc = claimRejectingGc
+        val orchestrator = createOrchestrator()
+        launchOrchestrator(orchestrator)
+        ui.emitNewGameRequested()
         val gameId = orchestrator.session!!.gameId
 
-        ui.emitDrawOfferRequested(gameId)
+        ui.emitDrawRequested(gameId)
 
-        assertNotNull(gc.lastDrawOffer)
-        assertEquals(gameId, gc.lastDrawOffer!!.first)
-        assertEquals(Color.WHITE, gc.lastDrawOffer!!.second)
+        assertNotNull(claimRejectingGc.lastDrawOffer)
+        assertEquals(gameId, claimRejectingGc.lastDrawOffer!!.first)
+        assertEquals(Color.WHITE, claimRejectingGc.lastDrawOffer!!.second)
 
         orchestrator.stop()
     }
 
     @Test
-    fun `draw offer in engine game shows unsupported error`() = runTest(UnconfinedTestDispatcher()) {
-        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+    fun `draw request accepts pending draw offer when claim fails`() = runTest(UnconfinedTestDispatcher()) {
+        val drawOfferedGc = object : FakeGameControllerModule() {
+            override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+                lastDrawClaim = gameId
+                return Result.Failure(GameError.InvalidClaim())
+            }
+            override suspend fun getState(gameId: String): Result<GameError, GameState> {
+                val state = super.getState(gameId)
+                return when (state) {
+                    is Result.Success -> Result.Success(state.value.copy(status = GameStatus.DRAW_OFFERED))
+                    is Result.Failure -> state
+                }
+            }
+        }
+        gc = drawOfferedGc
+        val orchestrator = createOrchestrator()
+        launchOrchestrator(orchestrator)
+        ui.emitNewGameRequested()
         val gameId = orchestrator.session!!.gameId
 
-        ui.emitDrawOfferRequested(gameId)
+        ui.emitDrawRequested(gameId)
+
+        assertNotNull(drawOfferedGc.lastDrawResponse)
+        assertEquals(true, drawOfferedGc.lastDrawResponse!!.second)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `draw request in engine game shows unsupported error when claim fails`() = runTest(UnconfinedTestDispatcher()) {
+        val claimRejectingGc = object : FakeGameControllerModule() {
+            override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+                lastDrawClaim = gameId
+                return Result.Failure(GameError.InvalidClaim())
+            }
+        }
+        gc = claimRejectingGc
+        val orchestrator = createOrchestrator(withEngine = true)
+        launchOrchestrator(orchestrator)
+        ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
+        ui.configureEngineGameResponse = Result.Success(
+            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        )
+        ui.emitNewGameRequested()
+        val gameId = orchestrator.session!!.gameId
+
+        ui.emitDrawRequested(gameId)
 
         assertEquals("Draw offers are not supported against the engine", ui.lastError)
 
@@ -386,14 +439,28 @@ class MoveHandlingTest {
     }
 
     @Test
-    fun `draw offer in remote game sends to remote server`() = runTest(UnconfinedTestDispatcher()) {
-        val orchestrator = startRemoteGame(Color.WHITE)
+    fun `draw request in remote game sends to remote server when claim fails`() = runTest(UnconfinedTestDispatcher()) {
+        val claimRejectingGc = object : FakeGameControllerModule() {
+            override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+                lastDrawClaim = gameId
+                return Result.Failure(GameError.InvalidClaim())
+            }
+        }
+        gc = claimRejectingGc
+        val orchestrator = createOrchestrator(withRemote = true)
+        launchOrchestrator(orchestrator)
+        ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
+        ui.emitNewGameRequested()
+        remote.emitGameStarted(GameStartedEvent(
+            gameId = "r1", color = Color.WHITE,
+            opponent = "opp", fen = startFen, timeControl = null,
+        ))
         val gameId = orchestrator.session!!.gameId
 
-        ui.emitDrawOfferRequested(gameId)
+        ui.emitDrawRequested(gameId)
 
         assertTrue(remote.drawOfferCalled)
-        assertNotNull(gc.lastDrawOffer)
+        assertNotNull(claimRejectingGc.lastDrawOffer)
 
         orchestrator.stop()
     }

@@ -20,13 +20,13 @@ interface UIModule {
     suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit>
     suspend fun displayError(message: String): Result<UIError, Unit>
     suspend fun boardDesync(expectedFen: String, message: String): Result<UIError, Unit>
+    suspend fun notifyGameEnded(summary: GameSummary): Result<UIError, Unit>
 
     // Events
     val newGameRequested: SharedFlow<Unit>
     val moveReady: SharedFlow<MoveReadyEvent>
     val resignRequested: SharedFlow<ResignRequestedEvent>
-    val drawOfferRequested: SharedFlow<DrawOfferRequestedEvent>
-    val drawClaimRequested: SharedFlow<DrawClaimRequestedEvent>
+    val drawRequested: SharedFlow<DrawRequestedEvent>
     val abortRequested: SharedFlow<AbortRequestedEvent>
 }
 
@@ -78,8 +78,19 @@ data class MoveReadyEvent(val gameId: String)
 
 data class ResignRequestedEvent(val gameId: String)
 
-data class DrawOfferRequestedEvent(val gameId: String)
-
-data class DrawClaimRequestedEvent(val gameId: String)
+data class DrawRequestedEvent(val gameId: String)
 
 data class AbortRequestedEvent(val gameId: String)
+
+data class GameSummary(
+    val gameId: String,
+    val mode: GameMode,
+    val whiteName: String?,
+    val blackName: String?,
+    val playerColor: Color?,
+    val timeControl: TimeControl?,
+    val result: String,
+    val reason: String,
+    val finalFen: String,
+    val moves: List<GameHistoryMove>,
+)

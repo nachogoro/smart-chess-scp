@@ -32,7 +32,7 @@ class GameControllerTest {
     @Test
     fun `create with custom FEN`() = runTest {
         val gc = GameController(backgroundScope)
-        val fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+        val fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1"
         val result = gc.create(CreateGameParams(fen = fen))
         assertIs<Result.Success<CreateGameResult>>(result)
 

@@ -40,8 +40,7 @@ class Orchestrator(
         launch { ui.newGameRequested.collect { eventChannel.send(OrchestratorEvent.NewGameRequested) } }
         launch { ui.moveReady.collect { eventChannel.send(OrchestratorEvent.MoveReady(it.gameId)) } }
         launch { ui.resignRequested.collect { eventChannel.send(OrchestratorEvent.ResignRequested(it.gameId)) } }
-        launch { ui.drawOfferRequested.collect { eventChannel.send(OrchestratorEvent.DrawOfferRequested(it.gameId)) } }
-        launch { ui.drawClaimRequested.collect { eventChannel.send(OrchestratorEvent.DrawClaimRequested(it.gameId)) } }
+        launch { ui.drawRequested.collect { eventChannel.send(OrchestratorEvent.DrawRequested(it.gameId)) } }
         launch { ui.abortRequested.collect { eventChannel.send(OrchestratorEvent.AbortRequested(it.gameId)) } }
 
         // Game Controller events
@@ -77,11 +76,15 @@ class Orchestrator(
         if (session != null) {
             when (event) {
                 is OrchestratorEvent.GameEnded -> {
-                    endGame()
+                    if (event.event.gameId == session?.gameId) {
+                        endGame(result = event.event.result, reason = event.event.reason)
+                    }
                     return
                 }
                 is OrchestratorEvent.FlagFell -> {
-                    if (session?.mode != GameMode.REMOTE) endGame()
+                    if (event.event.gameId == session?.gameId && session?.mode != GameMode.REMOTE) {
+                        endGame(reason = "timeout")
+                    }
                     return
                 }
                 is OrchestratorEvent.RemoteGameEnded -> {
@@ -90,7 +93,7 @@ class Orchestrator(
                         result = event.event.result,
                         reason = event.event.reason,
                     ))
-                    endGame()
+                    endGame(result = event.event.result, reason = event.event.reason)
                     return
                 }
                 is OrchestratorEvent.ResignRequested -> {
@@ -100,11 +103,11 @@ class Orchestrator(
                 is OrchestratorEvent.AbortRequested -> {
                     gameController.abort(session!!.gameId)
                     if (session?.mode == GameMode.REMOTE) session?.remote?.disconnect()
-                    endGame()
+                    endGame(result = "*", reason = "aborted")
                     return
                 }
-                is OrchestratorEvent.DrawClaimRequested -> {
-                    gameController.claimDraw(event.gameId)
+                is OrchestratorEvent.DrawRequested -> {
+                    handleDrawRequested(event.gameId)
                     return
                 }
                 is OrchestratorEvent.BoardError -> {
@@ -156,7 +159,7 @@ class Orchestrator(
                     is Result.Failure -> {
                         ui.displayError("Failed to create game: ${createResult.error.message}")
                         session?.remote?.disconnect()
-                        endGame()
+                        endGame(reason = "failed to create game")
                     }
                     is Result.Success -> {
                         val gameId = createResult.value.gameId
@@ -176,7 +179,6 @@ class Orchestrator(
     private suspend fun handleAwaitingPlayerMove(event: OrchestratorEvent, color: Color) {
         when (event) {
             is OrchestratorEvent.MoveReady -> handleMoveReady()
-            is OrchestratorEvent.DrawOfferRequested -> handleDrawOffer()
             is OrchestratorEvent.RemoteDrawOffered -> handleRemoteDrawOffer()
             else -> {} // Ignore
         }
@@ -198,10 +200,16 @@ class Orchestrator(
         val s = session ?: return
         val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
+        // Update clocks from game controller
+        if (gameState.clocks != null) {
+            session = s.copy(clocks = gameState.clocks)
+        }
+
         // Check if game already ended
-        if (gameState.status != GameStatus.IN_PROGRESS
+        if (gameState.status != GameStatus.NOT_STARTED
+                && gameState.status != GameStatus.IN_PROGRESS
                 && gameState.status != GameStatus.DRAW_OFFERED) {
-            endGame()
+            endGame(result = gameState.result.protocolString, reason = gameState.status.name.lowercase())
             return
         }
 
@@ -230,7 +238,25 @@ class Orchestrator(
         }
     }
 
-    internal fun endGame() {
+    internal suspend fun endGame(result: String = "*", reason: String = "") {
+        val s = session
+        if (s != null) {
+            val history = gameController.getHistory(s.gameId).getOrNull()
+            val gameState = gameController.getState(s.gameId).getOrNull()
+            val summary = GameSummary(
+                gameId = s.gameId,
+                mode = s.mode,
+                whiteName = s.whiteName,
+                blackName = s.blackName,
+                playerColor = s.playerColor,
+                timeControl = s.timeControl,
+                result = result,
+                reason = reason,
+                finalFen = gameState?.fen ?: "",
+                moves = history?.moves ?: emptyList(),
+            )
+            ui.notifyGameEnded(summary)
+        }
         stopModuleCollectors()
         session = null
         state = OrchestratorState.Idle

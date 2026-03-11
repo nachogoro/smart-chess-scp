@@ -48,6 +48,8 @@ internal suspend fun Orchestrator.setupLocal() {
         mode = GameMode.LOCAL,
         boardLevel = boardCaps.level,
         timeControl = config.timeControl,
+        whiteName = config.whiteName,
+        blackName = config.blackName,
     )
     transitionToAwaitingMove()
 }

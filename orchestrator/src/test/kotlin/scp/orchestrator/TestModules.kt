@@ -34,7 +34,7 @@ class FakeBoardModule(
 // Fake Game Controller
 // ---------------------------------------------------------------------------
 
-class FakeGameControllerModule : GameControllerModule {
+open class FakeGameControllerModule : GameControllerModule {
     private val _gameEnded = MutableSharedFlow<GameEndedEvent>()
     private val _flagFall = MutableSharedFlow<FlagFallEvent>()
     override val gameEnded: SharedFlow<GameEndedEvent> = _gameEnded
@@ -73,7 +73,7 @@ class FakeGameControllerModule : GameControllerModule {
         return Result.Success(CreateGameResult(gameId))
     }
 
-    override suspend fun getState(gameId: String): Result<GameError, GameState> {
+    override open suspend fun getState(gameId: String): Result<GameError, GameState> {
         val state = games[gameId] ?: return Result.Failure(GameError.GameNotFound())
         return Result.Success(state)
     }
@@ -109,7 +109,7 @@ class FakeGameControllerModule : GameControllerModule {
         return Result.Success(Unit)
     }
 
-    override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+    override open suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
         lastDrawClaim = gameId
         return Result.Success(Unit)
     }
@@ -140,15 +140,13 @@ class FakeUIModule : UIModule {
     private val _newGameRequested = MutableSharedFlow<Unit>()
     private val _moveReady = MutableSharedFlow<MoveReadyEvent>()
     private val _resignRequested = MutableSharedFlow<ResignRequestedEvent>()
-    private val _drawOfferRequested = MutableSharedFlow<DrawOfferRequestedEvent>()
-    private val _drawClaimRequested = MutableSharedFlow<DrawClaimRequestedEvent>()
+    private val _drawRequested = MutableSharedFlow<DrawRequestedEvent>()
     private val _abortRequested = MutableSharedFlow<AbortRequestedEvent>()
 
     override val newGameRequested: SharedFlow<Unit> = _newGameRequested
     override val moveReady: SharedFlow<MoveReadyEvent> = _moveReady
     override val resignRequested: SharedFlow<ResignRequestedEvent> = _resignRequested
-    override val drawOfferRequested: SharedFlow<DrawOfferRequestedEvent> = _drawOfferRequested
-    override val drawClaimRequested: SharedFlow<DrawClaimRequestedEvent> = _drawClaimRequested
+    override val drawRequested: SharedFlow<DrawRequestedEvent> = _drawRequested
     override val abortRequested: SharedFlow<AbortRequestedEvent> = _abortRequested
 
     // Configurable responses
@@ -172,6 +170,7 @@ class FakeUIModule : UIModule {
     var lastOpponentMove: ShowOpponentMoveParams? = null
     var lastError: String? = null
     var lastDesync: Pair<String, String>? = null
+    var lastGameSummary: GameSummary? = null
     var displayErrorCount = 0
 
     override suspend fun selectGameMode(availableModes: List<GameMode>) = selectGameModeResponse
@@ -202,12 +201,15 @@ class FakeUIModule : UIModule {
         return Result.Success(Unit)
     }
 
+    override suspend fun notifyGameEnded(summary: GameSummary): Result<UIError, Unit> {
+        lastGameSummary = summary
+        return Result.Success(Unit)
+    }
+
     suspend fun emitNewGameRequested() = _newGameRequested.emit(Unit)
     suspend fun emitMoveReady(gameId: String) = _moveReady.emit(MoveReadyEvent(gameId))
     suspend fun emitResignRequested(gameId: String) = _resignRequested.emit(ResignRequestedEvent(gameId))
-    suspend fun emitDrawOfferRequested(gameId: String) = _drawOfferRequested.emit(DrawOfferRequestedEvent(gameId))
-    suspend fun emitDrawClaimRequested(gameId: String) =
-        _drawClaimRequested.emit(DrawClaimRequestedEvent(gameId))
+    suspend fun emitDrawRequested(gameId: String) = _drawRequested.emit(DrawRequestedEvent(gameId))
     suspend fun emitAbortRequested(gameId: String) = _abortRequested.emit(AbortRequestedEvent(gameId))
 }
 

@@ -127,15 +127,28 @@ internal suspend fun Orchestrator.handleResign() {
     }
 }
 
-internal suspend fun Orchestrator.handleDrawOffer() {
+internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
     val s = session ?: return
+
+    // 1. Try claiming a draw (threefold repetition, 50-move rule, etc.)
+    val claimResult = gameController.claimDraw(gameId)
+    if (claimResult is Result.Success) return
+
+    // 2. If the opponent has offered a draw, accept it
+    val gameState = gameController.getState(gameId).getOrNull()
+    if (gameState?.status == GameStatus.DRAW_OFFERED) {
+        if (s.mode == GameMode.REMOTE) s.remote?.respondDraw(true)
+        gameController.respondDraw(gameId, true)
+        return
+    }
+
+    // 3. Otherwise, offer a draw
     when (s.mode) {
         GameMode.LOCAL -> {
             val turnColor = (state as? OrchestratorState.AwaitingPlayerMove)?.color ?: return
             gameController.offerDraw(s.gameId, turnColor)
         }
         GameMode.ENGINE -> {
-            // Engine games don't support draw offers
             ui.displayError("Draw offers are not supported against the engine")
         }
         GameMode.REMOTE -> {
