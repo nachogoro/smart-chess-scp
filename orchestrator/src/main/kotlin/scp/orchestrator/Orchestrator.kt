@@ -168,6 +168,15 @@ class Orchestrator(
                             playerColor = e.color,
                             timeControl = e.timeControl,
                         )
+                        notifyGameStarted(GameStartedInfo(
+                            gameId = gameId,
+                            mode = GameMode.REMOTE,
+                            playerColor = e.color,
+                            timeControl = e.timeControl,
+                            whiteName = null,
+                            blackName = null,
+                            initialFen = e.fen,
+                        ))
                         transitionToAwaitingMove()
                     }
                 }
@@ -255,11 +264,15 @@ class Orchestrator(
                 finalFen = gameState?.fen ?: "",
                 moves = history?.moves ?: emptyList(),
             )
-            ui.notifyGameEnded(summary)
+            ui.onGameEnded(summary)
         }
         stopModuleCollectors()
         session = null
         state = OrchestratorState.Idle
+    }
+
+    internal suspend fun notifyGameStarted(info: GameStartedInfo) {
+        ui.onGameStarted(info)
     }
 
 }

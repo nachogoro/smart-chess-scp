@@ -37,6 +37,8 @@ class ComposeUIModule : UIModule {
         private set
     var desyncInfo by mutableStateOf<DesyncInfo?>(null)
         private set
+    var lastGameStartedInfo by mutableStateOf<GameStartedInfo?>(null)
+        private set
     var lastGameSummary by mutableStateOf<GameSummary?>(null)
         private set
 
@@ -166,6 +168,14 @@ class ComposeUIModule : UIModule {
         }
     }
 
+    override suspend fun onGameStarted(info: GameStartedInfo) {
+        lastGameStartedInfo = info
+    }
+
+    override suspend fun onGameEnded(summary: GameSummary) {
+        lastGameSummary = summary
+    }
+
     override suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit> {
         lastOpponentMove = params
         return Result.Success(Unit)
@@ -181,11 +191,6 @@ class ComposeUIModule : UIModule {
         return Result.Success(Unit)
     }
 
-    override suspend fun notifyGameEnded(summary: GameSummary): Result<UIError, Unit> {
-        lastGameSummary = summary
-        return Result.Success(Unit)
-    }
-
     // -- Methods called by Compose UI to emit events --
 
     suspend fun requestNewGame() = _newGameRequested.emit(Unit)
@@ -197,6 +202,7 @@ class ComposeUIModule : UIModule {
     fun clearError() { lastError = null }
     fun clearDesync() { desyncInfo = null }
     fun clearOpponentMove() { lastOpponentMove = null }
+    fun clearGameStartedInfo() { lastGameStartedInfo = null }
     fun clearGameSummary() { lastGameSummary = null }
 }
 

@@ -56,3 +56,13 @@ enum class PromotionPiece(val uci: String) {
 data class Score(val type: ScoreType, val value: Int)
 
 enum class ScoreType { CP, MATE }
+
+data class GameStartedInfo(
+    val gameId: String,
+    val mode: GameMode,
+    val playerColor: Color?,
+    val timeControl: TimeControl?,
+    val whiteName: String?,
+    val blackName: String?,
+    val initialFen: String,
+)

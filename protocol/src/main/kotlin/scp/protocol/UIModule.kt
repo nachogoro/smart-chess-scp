@@ -16,11 +16,12 @@ interface UIModule {
     suspend fun promptMoveDisambiguation(moves: List<String>, color: Color): Result<UIError, String>
     suspend fun promptDrawResponse(gameId: String, from: String): Result<UIError, Boolean>
 
-    // Notifications
+    // Notifications (one-way, no response expected)
+    suspend fun onGameStarted(info: GameStartedInfo)
+    suspend fun onGameEnded(summary: GameSummary)
     suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit>
     suspend fun displayError(message: String): Result<UIError, Unit>
     suspend fun boardDesync(expectedFen: String, message: String): Result<UIError, Unit>
-    suspend fun notifyGameEnded(summary: GameSummary): Result<UIError, Unit>
 
     // Events
     val newGameRequested: SharedFlow<Unit>

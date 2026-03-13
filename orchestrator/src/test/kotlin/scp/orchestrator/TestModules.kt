@@ -167,10 +167,11 @@ class FakeUIModule : UIModule {
     var selectRemotePlatformResponse: Result<UIError, String> = Result.Success("lichess")
 
     // Tracking
+    var lastGameStartedInfo: GameStartedInfo? = null
+    var lastGameSummary: GameSummary? = null
     var lastOpponentMove: ShowOpponentMoveParams? = null
     var lastError: String? = null
     var lastDesync: Pair<String, String>? = null
-    var lastGameSummary: GameSummary? = null
     var displayErrorCount = 0
 
     override suspend fun selectGameMode(availableModes: List<GameMode>) = selectGameModeResponse
@@ -185,6 +186,14 @@ class FakeUIModule : UIModule {
 
     override suspend fun promptDrawResponse(gameId: String, from: String) = promptDrawResponseResult
 
+    override suspend fun onGameStarted(info: GameStartedInfo) {
+        lastGameStartedInfo = info
+    }
+
+    override suspend fun onGameEnded(summary: GameSummary) {
+        lastGameSummary = summary
+    }
+
     override suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit> {
         lastOpponentMove = params
         return Result.Success(Unit)
@@ -198,11 +207,6 @@ class FakeUIModule : UIModule {
 
     override suspend fun boardDesync(expectedFen: String, message: String): Result<UIError, Unit> {
         lastDesync = expectedFen to message
-        return Result.Success(Unit)
-    }
-
-    override suspend fun notifyGameEnded(summary: GameSummary): Result<UIError, Unit> {
-        lastGameSummary = summary
         return Result.Success(Unit)
     }
 
