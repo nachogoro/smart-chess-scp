@@ -51,6 +51,15 @@ internal suspend fun Orchestrator.setupLocal() {
         whiteName = config.whiteName,
         blackName = config.blackName,
     )
+    notifyGameStarted(GameStartedInfo(
+        gameId = gameId,
+        mode = GameMode.LOCAL,
+        playerColor = null,
+        timeControl = config.timeControl,
+        whiteName = config.whiteName,
+        blackName = config.blackName,
+        initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    ))
     transitionToAwaitingMove()
 }
 
@@ -98,6 +107,15 @@ internal suspend fun Orchestrator.setupEngine() {
         timeControl = config.timeControl,
         engine = eng,
     )
+    notifyGameStarted(GameStartedInfo(
+        gameId = gameId,
+        mode = GameMode.ENGINE,
+        playerColor = config.playerColor,
+        timeControl = config.timeControl,
+        whiteName = null,
+        blackName = null,
+        initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+    ))
     startModuleCollectors(session!!)
     transitionToAwaitingMove()
 }

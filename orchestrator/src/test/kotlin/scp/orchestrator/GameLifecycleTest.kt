@@ -394,4 +394,50 @@ class GameLifecycleTest {
 
         orchestrator.stop()
     }
+
+    // -----------------------------------------------------------------------
+    // Game started notification
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `local game notifies UI with game started info`() = runTest(UnconfinedTestDispatcher()) {
+        ui.configureLocalGameResponse = Result.Success(
+            LocalGameConfig(whiteName = "Alice", blackName = "Bob", timeControl = null)
+        )
+        val orchestrator = startLocalGame()
+
+        val info = ui.lastGameStartedInfo
+        assertNotNull(info)
+        assertEquals(orchestrator.session?.gameId ?: info.gameId, info.gameId)
+        assertEquals(GameMode.LOCAL, info.mode)
+        assertNull(info.playerColor)
+        assertEquals("Alice", info.whiteName)
+        assertEquals("Bob", info.blackName)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `engine game notifies UI with game started info`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+
+        val info = ui.lastGameStartedInfo
+        assertNotNull(info)
+        assertEquals(GameMode.ENGINE, info.mode)
+        assertEquals(Color.WHITE, info.playerColor)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `remote game notifies UI with game started info`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startRemoteGame(playerColor = Color.WHITE)
+
+        val info = ui.lastGameStartedInfo
+        assertNotNull(info)
+        assertEquals(GameMode.REMOTE, info.mode)
+        assertEquals(Color.WHITE, info.playerColor)
+
+        orchestrator.stop()
+    }
 }
