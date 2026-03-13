@@ -29,7 +29,7 @@ fun GameScreen(
     // Board pieces state — initialize from starting position
     var pieces by remember { mutableStateOf(startingPosition()) }
 
-    // Poll Orchestrator state (not Compose-observable) for display and game-end detection
+    // Poll Orchestrator state (not Compose-observable) for display
     var orchestratorState by remember { mutableStateOf(orchestrator.state) }
     var gameId by remember { mutableStateOf(orchestrator.session?.gameId) }
 
@@ -41,7 +41,7 @@ fun GameScreen(
         }
     }
 
-    // Game ended dialog — driven by notifyGameEnded from orchestrator
+    // Game ended — driven by onGameEnded notification
     val gameSummary = uiModule.lastGameSummary
     if (gameSummary != null) {
         AlertDialog(

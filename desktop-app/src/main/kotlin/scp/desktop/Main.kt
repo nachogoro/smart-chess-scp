@@ -115,15 +115,10 @@ fun App() {
                     },
                 )
 
-                // Poll for game session creation (Orchestrator state isn't Compose-observable)
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        if (orchestrator.session != null) {
-                            appState.screen = Screen.GAME
-                            break
-                        }
-                        kotlinx.coroutines.delay(100)
-                    }
+                // React to game start notification
+                if (uiModule.lastGameStartedInfo != null) {
+                    uiModule.clearGameStartedInfo()
+                    appState.screen = Screen.GAME
                 }
             }
         }
