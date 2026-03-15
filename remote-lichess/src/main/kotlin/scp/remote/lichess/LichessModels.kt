@@ -75,7 +75,7 @@ data class LichessGameEventInfo(
  */
 @Serializable
 data class LichessOpponent(
-    val id: String = "",
+    val id: String? = null,
     val username: String = "Anonymous",
     val rating: Int? = null,
 )
@@ -122,7 +122,7 @@ data class LichessVariant(
 /** Player information within a game stream. */
 @Serializable
 data class LichessPlayer(
-    val id: String = "",
+    val id: String? = null,
     val name: String = "Anonymous",
     val rating: Int? = null,
 )

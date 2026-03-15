@@ -10,6 +10,13 @@ import scp.protocol.*
 private const val STANDARD_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 private const val MIN_SEEK_TIME_MINUTES = 10
 
+/** Set to true to enable debug logging for the Lichess adapter. */
+var LICHESS_DEBUG = System.getenv("LICHESS_DEBUG")?.toBooleanStrictOrNull() ?: false
+
+private fun debugLog(msg: String) {
+    if (LICHESS_DEBUG) println("[lichess] $msg")
+}
+
 /**
  * [RemoteAdapterModule] implementation for Lichess, using the Lichess Board API.
  *
@@ -44,6 +51,12 @@ class LichessAdapter(
     private var currentGameId: String? = null
     private var myColor: Color? = null
 
+    /** True after [seekGame] is called, cleared when a game starts. Prevents processing stale games. */
+    private var awaitingGame: Boolean = false
+
+    /** Game IDs seen on the event stream before [seekGame] was called. Used to ignore stale replays. */
+    private val staleGameIds = mutableSetOf<String>()
+
     /** Number of moves the adapter knows about, used to detect new opponent moves via diffing. */
     private var lastKnownMoveCount: Int = 0
 
@@ -68,8 +81,9 @@ class LichessAdapter(
 
     /**
      * Returns the adapter's capabilities, including connection parameters
-     * (`api_token`) and seek/challenge parameters (`opponent`, `time`, `increment`,
-     * `rated`, `color`).
+     * (`api_token`) and seek parameters (`opponent_type`, `opponent_name`,
+     * `ai_level`, `time`, `increment`, `rated`, `color`), with conditional
+     * visibility based on `opponent_type`.
      */
     override suspend fun getCapabilities(): Result<RemoteError, RemoteCapabilities> {
         return Result.Success(
@@ -80,22 +94,39 @@ class LichessAdapter(
                     ParameterDescriptor(
                         name = "api_token",
                         type = ParameterType.STRING,
-                        description = "Lichess personal API token with board:play scope",
+                        description = "Lichess API token (scopes: board:play, challenge:write for AI)",
                         required = true,
                         sensitive = true,
                     ),
                 ),
                 seekParameters = listOf(
                     ParameterDescriptor(
-                        name = "opponent",
+                        name = "opponent_type",
+                        type = ParameterType.COMBO,
+                        description = "Type of opponent",
+                        default = "random",
+                        options = listOf("random", "friend", "ai"),
+                    ),
+                    ParameterDescriptor(
+                        name = "opponent_name",
                         type = ParameterType.STRING,
-                        description = "Lichess username to challenge. If omitted, creates an open seek.",
-                        required = false,
+                        description = "Lichess username to challenge",
+                        required = true,
+                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "friend"),
+                    ),
+                    ParameterDescriptor(
+                        name = "ai_level",
+                        type = ParameterType.SPIN,
+                        description = "Stockfish level (1-8)",
+                        min = 1,
+                        max = 8,
+                        default = 4,
+                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "ai"),
                     ),
                     ParameterDescriptor(
                         name = "time",
                         type = ParameterType.SPIN,
-                        description = "Initial time in minutes (Rapid and Classical only, min 10)",
+                        description = "Initial time in minutes (min 10)",
                         default = 15,
                         min = MIN_SEEK_TIME_MINUTES,
                         max = 180,
@@ -113,6 +144,7 @@ class LichessAdapter(
                         type = ParameterType.CHECK,
                         description = "Play a rated game",
                         default = false,
+                        visibleWhen = VisibleWhen(field = "opponent_type", oneOf = listOf("random", "friend")),
                     ),
                     ParameterDescriptor(
                         name = "color",
@@ -160,24 +192,27 @@ class LichessAdapter(
     }
 
     /**
-     * Starts looking for a game, either by creating an open seek or challenging a specific user.
+     * Starts looking for a game based on the selected opponent type.
      *
-     * If `"opponent"` is provided in [settings], sends a challenge to that Lichess user via
-     * `POST /api/challenge/{username}`. Otherwise, creates an open seek via `POST /api/board/seek`.
+     * - `"random"` (default): Creates an open seek via `POST /api/board/seek`.
+     * - `"friend"`: Challenges a specific user via `POST /api/challenge/{username}`.
+     * - `"ai"`: Challenges the Lichess Stockfish AI via `POST /api/challenge/ai`.
      *
-     * Both operations open a streaming connection that stays alive until matched/accepted.
-     * The actual game start notification arrives via the event stream, not the seek/challenge stream.
+     * For `random` and `friend`, a streaming connection stays alive until matched/accepted.
+     * For `ai`, the game starts immediately. In all cases, the actual game start notification
+     * arrives via the event stream.
      *
-     * @param settings Seek parameters: `time`, `increment`, `rated`, `color`, and optionally `opponent`.
+     * @param settings Seek parameters: `opponent_type`, `time`, `increment`, `color`,
+     *   and conditionally `opponent_name`, `ai_level`, `rated`.
      */
     override suspend fun seekGame(settings: Map<String, Any>): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
 
+        val opponentType = settings["opponent_type"] as? String ?: "random"
         val time = (settings["time"] as? Number)?.toInt() ?: 15
         val increment = (settings["increment"] as? Number)?.toInt() ?: 10
         val rated = settings["rated"] as? Boolean ?: false
         val color = settings["color"] as? String ?: "random"
-        val opponent = settings["opponent"] as? String
 
         if (time < MIN_SEEK_TIME_MINUTES) {
             return Result.Failure(
@@ -187,21 +222,41 @@ class LichessAdapter(
             )
         }
 
-        seekJob?.cancel()
-        seekJob = scope.launch {
-            try {
-                val stream = when(opponent) {
-                    null -> api.createSeek(t, time, increment, rated, color)
-                    else -> api.createChallenge(t, opponent, time, increment, rated, color)
-                }
+        awaitingGame = true
 
-                // Collecting keeps the HTTP connection alive. Lichess cancels the
-                // seek/challenge if the connection drops. The body is empty because
-                // game start notifications arrive via the event stream, not this stream.
-                stream.collect {}
-            } catch (e: Exception) {
-                val action = if (opponent != null) "Challenge" else "Seek"
-                _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", "$action failed: ${e.message}"))
+        when (opponentType) {
+            "ai" -> {
+                val level = (settings["ai_level"] as? Number)?.toInt() ?: 4
+                try {
+                    api.challengeAi(t, level, time, increment, color)
+                } catch (e: Exception) {
+                    return Result.Failure(RemoteError.PlatformError("AI challenge failed: ${e.message}"))
+                }
+            }
+            else -> {
+                seekJob?.cancel()
+                seekJob = scope.launch {
+                    try {
+                        val stream = when (opponentType) {
+                            "friend" -> {
+                                val opponent = settings["opponent_name"] as? String
+                                    ?: return@launch _errors.emit(
+                                        RemoteErrorEvent("INVALID_PARAMS", "opponent_name is required for friend challenges")
+                                    )
+                                api.createChallenge(t, opponent, time, increment, rated, color)
+                            }
+                            else -> api.createSeek(t, time, increment, rated, color)
+                        }
+
+                        // Collecting keeps the HTTP connection alive. Lichess cancels the
+                        // seek/challenge if the connection drops. The body is empty because
+                        // game start notifications arrive via the event stream, not this stream.
+                        stream.collect {}
+                    } catch (e: Exception) {
+                        val action = if (opponentType == "friend") "Challenge" else "Seek"
+                        _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", "$action failed: ${e.message}"))
+                    }
+                }
             }
         }
 
@@ -210,6 +265,8 @@ class LichessAdapter(
 
     /** Cancels any active seek or pending challenge. */
     override suspend fun cancelSeek(): Result<RemoteError, Unit> {
+        awaitingGame = false
+        staleGameIds.clear()
         seekJob?.cancel()
         seekJob = null
         return Result.Success(Unit)
@@ -218,9 +275,6 @@ class LichessAdapter(
     /**
      * Submits a move in the current game.
      *
-     * Increments [lastKnownMoveCount] on success so that the echo of our own move
-     * from the game stream is not mistakenly emitted as an opponent move.
-     *
      * @param move UCI move string (e.g. `"e2e4"`, `"e7e8q"`).
      */
     override suspend fun sendMove(move: String): Result<RemoteError, Unit> {
@@ -228,8 +282,9 @@ class LichessAdapter(
         val gameId = currentGameId ?: return Result.Failure(RemoteError.PlatformError("No active game"))
 
         return try {
+            debugLog("sendMove: $move (gameId=$gameId, lastKnownMoveCount=$lastKnownMoveCount)")
             api.makeMove(t, gameId, move)
-            lastKnownMoveCount++
+            debugLog("sendMove OK, lastKnownMoveCount=$lastKnownMoveCount")
             Result.Success(Unit)
         } catch (e: LichessApiException) {
             if (e.statusCode == 400) {
@@ -287,6 +342,8 @@ class LichessAdapter(
 
     /** Disconnects from Lichess, cancelling all streams and clearing session state. */
     override suspend fun disconnect(): Result<RemoteError, Unit> {
+        awaitingGame = false
+        staleGameIds.clear()
         seekJob?.cancel()
         gameStreamJob?.cancel()
         eventStreamJob?.cancel()
@@ -306,12 +363,16 @@ class LichessAdapter(
     private fun startEventStream() {
         val t = token ?: return
         eventStreamJob?.cancel()
+        debugLog("Starting event stream")
         eventStreamJob = scope.launch {
             try {
                 api.streamEvents(t).collect { line ->
+                    debugLog("Event stream line: $line")
                     handleEventStreamLine(line)
                 }
+                debugLog("Event stream ended normally")
             } catch (e: Exception) {
+                debugLog("Event stream error: ${e::class.simpleName}: ${e.message}")
                 _errors.emit(RemoteErrorEvent("CONNECTION_LOST", "Event stream lost: ${e.message}"))
             }
         }
@@ -320,21 +381,46 @@ class LichessAdapter(
     /**
      * Processes a single line from the event stream.
      *
-     * On `gameStart`, records the game ID and opens a per-game stream.
+     * On `gameStart`, records the game ID and opens a per-game stream — but only
+     * if the adapter is actively awaiting a game (i.e. [seekGame] was called).
+     * This prevents stale `gameStart` events from previous sessions from being
+     * processed.
+     *
      * `gameFinish` is ignored here — game termination is detected from the game stream's
      * terminal status instead, which provides richer information (winner, reason).
      */
     private fun handleEventStreamLine(line: String) {
-        val event = parseEventStreamLine(line) ?: return
+        val event = parseEventStreamLine(line)
+        if (event == null) {
+            debugLog("Event stream: failed to parse line")
+            return
+        }
 
         when (event.type) {
             "gameStart" -> {
-                val game = event.game ?: return
+                val game = event.game
+                debugLog("Event: gameStart gameId=${game?.gameId} awaitingGame=$awaitingGame staleIds=$staleGameIds")
+                if (game == null) return
+                if (!awaitingGame) {
+                    // Not seeking — remember this ID so we skip it later
+                    staleGameIds.add(game.gameId)
+                    return
+                }
+                if (game.gameId in staleGameIds) {
+                    // This is a stale game replayed after seekGame was called — skip it
+                    debugLog("Skipping stale game ${game.gameId}")
+                    return
+                }
+                awaitingGame = false
+                staleGameIds.clear()
                 currentGameId = game.gameId
                 startGameStream(game.gameId)
             }
             "gameFinish" -> {
-                // Game finish is handled by the game stream's terminal status
+                debugLog("Event: gameFinish")
+            }
+            else -> {
+                debugLog("Event: type=${event.type} (ignored)")
             }
         }
     }
@@ -346,13 +432,17 @@ class LichessAdapter(
         val t = token ?: return
         gameStreamJob?.cancel()
         lastKnownMoveCount = 0
+        debugLog("Starting game stream for $gameId")
 
         gameStreamJob = scope.launch {
             try {
                 api.streamGame(t, gameId).collect { line ->
+                    debugLog("Game stream line: $line")
                     handleGameStreamLine(line)
                 }
+                debugLog("Game stream ended normally for $gameId")
             } catch (e: Exception) {
+                debugLog("Game stream error for $gameId: ${e::class.simpleName}: ${e.message}")
                 _errors.emit(RemoteErrorEvent("CONNECTION_LOST", "Game stream lost: ${e.message}"))
             }
         }
@@ -360,11 +450,21 @@ class LichessAdapter(
 
     /** Dispatches a game stream line to the appropriate handler. */
     private suspend fun handleGameStreamLine(line: String) {
-        val event = parseGameStreamLine(line) ?: return
+        val event = parseGameStreamLine(line)
+        if (event == null) {
+            debugLog("Game stream: failed to parse line")
+            return
+        }
 
         when (event) {
-            is GameStreamEvent.Full -> handleGameFull(event.data)
-            is GameStreamEvent.State -> handleGameState(event.data)
+            is GameStreamEvent.Full -> {
+                debugLog("Game stream: gameFull id=${event.data.id}")
+                handleGameFull(event.data)
+            }
+            is GameStreamEvent.State -> {
+                debugLog("Game stream: gameState moves=\"${event.data.moves}\" status=${event.data.status}")
+                handleGameState(event.data)
+            }
         }
     }
 
@@ -377,6 +477,7 @@ class LichessAdapter(
      */
     private suspend fun handleGameFull(game: LichessGameFull) {
         val username = user?.username ?: return
+        debugLog("handleGameFull: white=${game.white.name}(id=${game.white.id}) black=${game.black.name}(id=${game.black.id}) me=$username")
 
         myColor = when {
             game.white.name.equals(username, ignoreCase = true) ||
@@ -418,21 +519,54 @@ class LichessAdapter(
      * Handles an incremental `gameState` message from the game stream.
      *
      * Checks for three things in order:
-     * 1. **Terminal status** — If the game has ended (checkmate, resignation, draw, timeout, etc.),
-     *    emits a [RemoteGameEndedEvent] and cleans up.
-     * 2. **Draw offers** — If the opponent has a pending draw offer (`bdraw`/`wdraw`), emits
-     *    on [drawOffered].
-     * 3. **New moves** — Compares the incoming move count against [lastKnownMoveCount]. If there
+     * 1. **New moves** — Compares the incoming move count against [lastKnownMoveCount]. If there
      *    are new moves and the latest one was made by the opponent, emits an [OpponentMoveEvent].
-     *    Our own moves are filtered out because [sendMove] pre-increments [lastKnownMoveCount].
+     *    Move detection runs first so that a terminal state (e.g. checkmate) emits the final
+     *    opponent move before the game-over notification.
+     * 2. **Terminal status** — If the game has ended (checkmate, resignation, draw, timeout, etc.),
+     *    emits a [RemoteGameEndedEvent] and cleans up.
+     * 3. **Draw offers** — If the opponent has a pending draw offer (`bdraw`/`wdraw`), emits
+     *    on [drawOffered].
      */
     private suspend fun handleGameState(state: LichessGameState) {
-        val color = myColor ?: return
+        val color = myColor
+        if (color == null) {
+            debugLog("handleGameState: myColor is null, ignoring")
+            return
+        }
+
+        // Detect new opponent moves FIRST — a terminal gameState (e.g. checkmate)
+        // includes the final move, and we must emit it before emitting gameEnded.
+        val moves = if (state.moves.isBlank()) emptyList() else state.moves.split(" ")
+        val newMoveCount = moves.size
+
+        debugLog("Move detection: newMoveCount=$newMoveCount lastKnownMoveCount=$lastKnownMoveCount myColor=$color")
+
+        if (newMoveCount > lastKnownMoveCount) {
+            val latestMove = moves.last()
+            val movingColor = if (newMoveCount % 2 == 1) Color.WHITE else Color.BLACK
+            debugLog("New move: $latestMove by $movingColor (I am $color)")
+            if (movingColor != color) {
+                debugLog("Emitting opponentMove: $latestMove")
+                _opponentMove.emit(
+                    OpponentMoveEvent(
+                        move = latestMove,
+                        clocks = Clocks(whiteMs = state.wtime, blackMs = state.btime),
+                    )
+                )
+            } else {
+                debugLog("Move is mine, not emitting opponentMove")
+            }
+            lastKnownMoveCount = newMoveCount
+        } else {
+            debugLog("No new moves (count unchanged)")
+        }
 
         // Check for terminal status
         if (isTerminalStatus(state.status)) {
             val result = mapLichessResult(state.status, state.winner, color)
             val reason = mapLichessReason(state.status)
+            debugLog("Game ended: status=${state.status} winner=${state.winner} result=$result reason=$reason")
             currentGameId = null
             gameStreamJob?.cancel()
             _gameEnded.emit(RemoteGameEndedEvent(result = result, reason = reason))
@@ -445,26 +579,8 @@ class LichessAdapter(
             Color.BLACK -> state.wdraw
         }
         if (opponentDrawOffer) {
+            debugLog("Opponent draw offer detected")
             _drawOffered.emit(Unit)
-        }
-
-        // Detect new opponent moves
-        val moves = if (state.moves.isBlank()) emptyList() else state.moves.split(" ")
-        val newMoveCount = moves.size
-
-        if (newMoveCount > lastKnownMoveCount) {
-            val latestMove = moves.last()
-            // Check if this is an opponent move
-            val movingColor = if (newMoveCount % 2 == 1) Color.WHITE else Color.BLACK
-            if (movingColor != color) {
-                _opponentMove.emit(
-                    OpponentMoveEvent(
-                        move = latestMove,
-                        clocks = Clocks(whiteMs = state.wtime, blackMs = state.btime),
-                    )
-                )
-            }
-            lastKnownMoveCount = newMoveCount
         }
     }
 

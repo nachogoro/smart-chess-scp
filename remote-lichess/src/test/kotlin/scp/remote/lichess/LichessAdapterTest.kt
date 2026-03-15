@@ -83,6 +83,15 @@ class LichessAdapterTest {
         assertIs<Result.Success<ConfigureResult>>(result)
     }
 
+    /** Configures and starts seeking, so the adapter will process gameStart events. */
+    private suspend fun configureAndSeek(
+        api: FakeLichessApi,
+        adapter: LichessAdapter,
+    ) {
+        configureAdapter(api, adapter)
+        adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 1, "time" to 10, "increment" to 0))
+    }
+
     // -- GetCapabilities --
 
     @Test
@@ -92,11 +101,39 @@ class LichessAdapterTest {
         assertIs<Result.Success<RemoteCapabilities>>(result)
         assertEquals("Lichess", result.value.platform)
         assertTrue(result.value.parameters.any { it.name == "api_token" })
+        assertTrue(result.value.seekParameters.any { it.name == "opponent_type" })
         assertTrue(result.value.seekParameters.any { it.name == "time" })
         assertTrue(result.value.seekParameters.any { it.name == "increment" })
         assertTrue(result.value.seekParameters.any { it.name == "rated" })
         assertTrue(result.value.seekParameters.any { it.name == "color" })
-        assertTrue(result.value.seekParameters.any { it.name == "opponent" })
+    }
+
+    @Test
+    fun `getCapabilities opponent_name is visible only for friend`() = runTest {
+        val adapter = LichessAdapter(backgroundScope)
+        val caps = (adapter.getCapabilities() as Result.Success).value
+        val opponentName = caps.seekParameters.first { it.name == "opponent_name" }
+        assertEquals("opponent_type", opponentName.visibleWhen?.field)
+        assertEquals("friend", opponentName.visibleWhen?.equals)
+        assertTrue(opponentName.required)
+    }
+
+    @Test
+    fun `getCapabilities ai_level is visible only for ai`() = runTest {
+        val adapter = LichessAdapter(backgroundScope)
+        val caps = (adapter.getCapabilities() as Result.Success).value
+        val aiLevel = caps.seekParameters.first { it.name == "ai_level" }
+        assertEquals("opponent_type", aiLevel.visibleWhen?.field)
+        assertEquals("ai", aiLevel.visibleWhen?.equals)
+    }
+
+    @Test
+    fun `getCapabilities rated is visible for random and friend`() = runTest {
+        val adapter = LichessAdapter(backgroundScope)
+        val caps = (adapter.getCapabilities() as Result.Success).value
+        val rated = caps.seekParameters.first { it.name == "rated" }
+        assertEquals("opponent_type", rated.visibleWhen?.field)
+        assertEquals(listOf("random", "friend"), rated.visibleWhen?.oneOf)
     }
 
     @Test
@@ -160,13 +197,13 @@ class LichessAdapterTest {
     }
 
     @Test
-    fun `seekGame passes params to API`() = runTest {
+    fun `seekGame with random opponent creates open seek`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
         configureAdapter(api, adapter)
         advanceUntilIdle()
 
-        adapter.seekGame(mapOf("time" to 15, "increment" to 10, "rated" to true, "color" to "white"))
+        adapter.seekGame(mapOf("opponent_type" to "random", "time" to 15, "increment" to 10, "rated" to true, "color" to "white"))
         advanceUntilIdle()
 
         val params = api.lastSeekParams
@@ -180,16 +217,33 @@ class LichessAdapterTest {
     }
 
     @Test
-    fun `seekGame with opponent creates challenge`() = runTest {
+    fun `seekGame defaults to random when opponent_type omitted`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
         configureAdapter(api, adapter)
         advanceUntilIdle()
 
-        adapter.seekGame(mapOf("time" to 15, "increment" to 10, "rated" to false, "opponent" to "friend123"))
+        adapter.seekGame(mapOf("time" to 15, "increment" to 10))
         advanceUntilIdle()
 
-        assertNull(api.lastSeekParams, "Should not create a seek when opponent is specified")
+        assertNotNull(api.lastSeekParams)
+        assertNull(api.lastChallengeParams)
+        assertNull(api.lastAiChallengeParams)
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `seekGame with friend creates challenge`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAdapter(api, adapter)
+        advanceUntilIdle()
+
+        adapter.seekGame(mapOf("opponent_type" to "friend", "opponent_name" to "friend123", "time" to 15, "increment" to 10, "rated" to false))
+        advanceUntilIdle()
+
+        assertNull(api.lastSeekParams, "Should not create a seek when opponent_type is friend")
         val challenge = api.lastChallengeParams
         assertNotNull(challenge)
         assertEquals("friend123", challenge.username)
@@ -201,12 +255,47 @@ class LichessAdapterTest {
     }
 
     @Test
+    fun `seekGame with ai challenges stockfish`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAdapter(api, adapter)
+        advanceUntilIdle()
+
+        val result = adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 6, "time" to 15, "increment" to 10, "color" to "black"))
+        assertIs<Result.Success<Unit>>(result)
+
+        assertNull(api.lastSeekParams, "Should not create a seek for AI")
+        assertNull(api.lastChallengeParams, "Should not create a user challenge for AI")
+        val aiParams = api.lastAiChallengeParams
+        assertNotNull(aiParams)
+        assertEquals(6, aiParams.level)
+        assertEquals(15, aiParams.time)
+        assertEquals(10, aiParams.increment)
+        assertEquals("black", aiParams.color)
+
+        adapter.disconnect()
+    }
+
+    @Test
     fun `challenge also rejects blitz time control`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
         configureAdapter(api, adapter)
 
-        val result = adapter.seekGame(mapOf("time" to 3, "opponent" to "friend123"))
+        val result = adapter.seekGame(mapOf("opponent_type" to "friend", "opponent_name" to "friend123", "time" to 3))
+        assertIs<Result.Failure<RemoteError>>(result)
+        assertIs<RemoteError.InvalidParams>(result.error)
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `ai challenge rejects blitz time control`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAdapter(api, adapter)
+
+        val result = adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 4, "time" to 3))
         assertIs<Result.Failure<RemoteError>>(result)
         assertIs<RemoteError.InvalidParams>(result.error)
 
@@ -229,7 +318,7 @@ class LichessAdapterTest {
     fun `game start emits gameStarted event`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val events = mutableListOf<GameStartedEvent>()
@@ -257,7 +346,7 @@ class LichessAdapterTest {
     fun `game start as black detects color correctly`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val events = mutableListOf<GameStartedEvent>()
@@ -284,7 +373,7 @@ class LichessAdapterTest {
     fun `opponent move emits opponentMove event`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val moves = mutableListOf<OpponentMoveEvent>()
@@ -316,7 +405,7 @@ class LichessAdapterTest {
     fun `own move does not emit opponentMove`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val moves = mutableListOf<OpponentMoveEvent>()
@@ -346,7 +435,7 @@ class LichessAdapterTest {
     fun `opponent draw offer emits drawOffered`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val drawOffers = mutableListOf<Unit>()
@@ -372,7 +461,7 @@ class LichessAdapterTest {
     fun `own draw offer does not emit drawOffered`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val drawOffers = mutableListOf<Unit>()
@@ -400,7 +489,7 @@ class LichessAdapterTest {
     fun `checkmate emits gameEnded`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val endings = mutableListOf<RemoteGameEndedEvent>()
@@ -426,7 +515,7 @@ class LichessAdapterTest {
     fun `resignation emits gameEnded`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val endings = mutableListOf<RemoteGameEndedEvent>()
@@ -451,7 +540,7 @@ class LichessAdapterTest {
     fun `draw emits gameEnded with draw result`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val endings = mutableListOf<RemoteGameEndedEvent>()
@@ -475,7 +564,7 @@ class LichessAdapterTest {
     fun `timeout with no winner is draw`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         val endings = mutableListOf<RemoteGameEndedEvent>()
@@ -502,7 +591,7 @@ class LichessAdapterTest {
     fun `sendMove calls API`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         api.eventStreamChannel.send(gameStartEvent())
@@ -521,7 +610,7 @@ class LichessAdapterTest {
     fun `resign calls API`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
-        configureAdapter(api, adapter)
+        configureAndSeek(api, adapter)
         advanceUntilIdle()
 
         api.eventStreamChannel.send(gameStartEvent())

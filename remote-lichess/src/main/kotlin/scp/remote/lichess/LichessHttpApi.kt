@@ -11,6 +11,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.io.BufferedReader
+import java.time.Duration
 
 /**
  * Real HTTP implementation of [LichessApi] using the JDK `HttpClient`.
@@ -28,7 +29,9 @@ class LichessHttpApi(
     private val baseUrl: String = "https://lichess.org",
 ) : LichessApi {
 
-    private val httpClient = HttpClient.newBuilder().build()
+    private val httpClient = HttpClient.newBuilder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .build()
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -76,6 +79,22 @@ class LichessHttpApi(
         return streamNdjson(token, "/api/challenge/$username", body)
     }
 
+    override suspend fun challengeAi(
+        token: String,
+        level: Int,
+        time: Int,
+        increment: Int,
+        color: String,
+    ) {
+        val body = buildString {
+            append("level=$level")
+            append("&clock.limit=${time * 60}")
+            append("&clock.increment=$increment")
+            if (color != "random") append("&color=$color")
+        }
+        post(token, "/api/challenge/ai", body)
+    }
+
     override suspend fun makeMove(token: String, gameId: String, move: String) {
         post(token, "/api/board/game/$gameId/move/$move")
     }
@@ -102,6 +121,7 @@ class LichessHttpApi(
         val request = HttpRequest.newBuilder()
             .uri(URI.create("$baseUrl$path"))
             .header("Authorization", "Bearer $token")
+            .timeout(Duration.ofSeconds(15))
             .GET()
             .build()
 
@@ -120,6 +140,7 @@ class LichessHttpApi(
     ): String = withContext(Dispatchers.IO) {
         val builder = HttpRequest.newBuilder()
             .uri(URI.create("$baseUrl$path"))
+            .timeout(Duration.ofSeconds(15))
             .header("Authorization", "Bearer $token")
 
         if (body.isNotEmpty()) {

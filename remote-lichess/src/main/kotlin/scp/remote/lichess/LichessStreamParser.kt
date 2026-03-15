@@ -4,8 +4,18 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-/** Shared JSON configuration for parsing Lichess NDJSON lines. */
-val lichessJson = Json { ignoreUnknownKeys = true }
+/**
+ * Shared JSON configuration for parsing Lichess NDJSON lines.
+ *
+ * - `ignoreUnknownKeys`: Lichess may add new fields at any time.
+ * - `coerceInputValues`: Lichess sends `null` for fields that have non-null defaults
+ *   (e.g. `"id": null` for AI players). Coercion replaces `null` with the default value
+ *   instead of throwing.
+ */
+val lichessJson = Json {
+    ignoreUnknownKeys = true
+    coerceInputValues = true
+}
 
 /**
  * Parsed result from a game stream line.
@@ -27,16 +37,20 @@ sealed class GameStreamEvent {
  *
  * Dispatches on the `type` field: `"gameFull"` → [GameStreamEvent.Full],
  * `"gameState"` → [GameStreamEvent.State]. Returns null for unrecognized types
- * (e.g. `"chatLine"`).
+ * (e.g. `"chatLine"`) or unparseable messages.
  */
 fun parseGameStreamLine(line: String): GameStreamEvent? {
-    val obj = lichessJson.decodeFromString<JsonObject>(line)
-    val type = obj["type"]?.jsonPrimitive?.content ?: return null
+    return try {
+        val obj = lichessJson.decodeFromString<JsonObject>(line)
+        val type = obj["type"]?.jsonPrimitive?.content ?: return null
 
-    return when (type) {
-        "gameFull" -> GameStreamEvent.Full(lichessJson.decodeFromString<LichessGameFull>(line))
-        "gameState" -> GameStreamEvent.State(lichessJson.decodeFromString<LichessGameState>(line))
-        else -> null
+        when (type) {
+            "gameFull" -> GameStreamEvent.Full(lichessJson.decodeFromString<LichessGameFull>(line))
+            "gameState" -> GameStreamEvent.State(lichessJson.decodeFromString<LichessGameState>(line))
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
     }
 }
 

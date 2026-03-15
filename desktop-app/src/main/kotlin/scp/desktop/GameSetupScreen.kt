@@ -48,6 +48,13 @@ fun GameSetupScreen(
             pendingEngineConfig != null -> EngineGameSetupForm(settings, pendingEngineConfig, onBack)
             pendingRemotePlatformSelection != null -> PlatformSelectionForm(pendingRemotePlatformSelection, onBack)
             pendingRemoteConfig != null -> RemoteGameSetupForm(settings, pendingRemoteConfig, onBack)
+            uiModule.isSeeking -> {
+                CircularProgressIndicator()
+                Spacer(Modifier.height(16.dp))
+                Text("Seeking game...")
+                Spacer(Modifier.height(16.dp))
+                OutlinedButton(onClick = onBack) { Text("Cancel") }
+            }
             else -> {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(16.dp))
@@ -62,7 +69,7 @@ fun GameSetupScreen(
 @Composable
 private fun LocalGameSetupForm(
     settings: AppSettings,
-    request: PendingRequest<Unit, LocalGameConfig>,
+    request: PendingRequest<String?, LocalGameConfig>,
     onBack: () -> Unit,
 ) {
     var whiteName by remember { mutableStateOf(settings.playerName.ifEmpty { "White" }) }
@@ -70,6 +77,8 @@ private fun LocalGameSetupForm(
     var useTimeControl by remember { mutableStateOf(false) }
     var timeMinutes by remember { mutableStateOf("10") }
     var incrementSeconds by remember { mutableStateOf("0") }
+
+    SetupErrorBanner(request.input)
 
     OutlinedTextField(
         value = whiteName,
@@ -146,6 +155,8 @@ private fun EngineGameSetupForm(
     var useTimeControl by remember { mutableStateOf(false) }
     var timeMinutes by remember { mutableStateOf("10") }
     var incrementSeconds by remember { mutableStateOf("0") }
+
+    SetupErrorBanner(request.input.errorMessage)
 
     Text("Playing against: ${request.input.engineName}", style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(16.dp))
@@ -229,7 +240,7 @@ private fun RemoteGameSetupForm(
     val platformFields = remember(params) {
         params.parameters.associate { p ->
             val default = when (p.name) {
-                "token" -> settings.lichessToken
+                "api_token" -> settings.lichessToken
                 else -> (p.default ?: "").toString()
             }
             p.name to mutableStateOf(default)
@@ -243,21 +254,17 @@ private fun RemoteGameSetupForm(
         }
     }
 
+    SetupErrorBanner(params.errorMessage)
+
     Text("Platform: ${params.platform}", style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(16.dp))
 
     if (platformFields.isNotEmpty()) {
         Text("Connection Settings", style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(8.dp))
-        platformFields.forEach { (name, state) ->
-            OutlinedTextField(
-                value = state.value,
-                onValueChange = { state.value = it },
-                label = { Text(name) },
-                modifier = Modifier.width(300.dp),
-                singleLine = true,
-            )
-            Spacer(Modifier.height(4.dp))
+        params.parameters.forEach { p ->
+            val state = platformFields[p.name] ?: return@forEach
+            ParameterField(p, state)
         }
         Spacer(Modifier.height(12.dp))
     }
@@ -265,15 +272,11 @@ private fun RemoteGameSetupForm(
     if (seekFields.isNotEmpty()) {
         Text("Game Settings", style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(8.dp))
-        seekFields.forEach { (name, state) ->
-            OutlinedTextField(
-                value = state.value,
-                onValueChange = { state.value = it },
-                label = { Text(name) },
-                modifier = Modifier.width(300.dp),
-                singleLine = true,
-            )
-            Spacer(Modifier.height(4.dp))
+        params.seekParameters.forEach { p ->
+            val state = seekFields[p.name] ?: return@forEach
+            if (isParameterVisible(p, seekFields)) {
+                ParameterField(p, state)
+            }
         }
     }
 
@@ -282,10 +285,130 @@ private fun RemoteGameSetupForm(
         OutlinedButton(onClick = { request.cancel(); onBack() }) { Text("Cancel") }
         Button(onClick = {
             val platformSettings = platformFields.mapValues { (_, state) -> state.value as Any }
-            val seekSettings = seekFields.mapValues { (_, state) -> state.value as Any }
+            val seekSettings = buildSeekSettings(params.seekParameters, seekFields)
             request.complete(RemoteGameConfig(platformSettings, seekSettings))
         }) { Text("Find Game") }
     }
+}
+
+/** Returns true if a parameter should be visible based on its `visibleWhen` condition. */
+private fun isParameterVisible(
+    param: ParameterDescriptor,
+    fields: Map<String, MutableState<String>>,
+): Boolean {
+    val condition = param.visibleWhen ?: return true
+    val fieldValue = fields[condition.field]?.value ?: return true
+    return when {
+        condition.equals != null -> fieldValue == condition.equals.toString()
+        condition.oneOf != null -> fieldValue in condition.oneOf!!.map { it.toString() }
+        else -> true
+    }
+}
+
+/** Shows an inline error banner when a setup attempt has failed. */
+@Composable
+private fun SetupErrorBanner(errorMessage: String?) {
+    if (errorMessage != null) {
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            ),
+            modifier = Modifier.width(300.dp),
+        ) {
+            Text(
+                errorMessage,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.padding(12.dp),
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+    }
+}
+
+/** Builds the seek settings map, only including values for visible parameters. */
+private fun buildSeekSettings(
+    descriptors: List<ParameterDescriptor>,
+    fields: Map<String, MutableState<String>>,
+): Map<String, Any> {
+    return descriptors
+        .filter { isParameterVisible(it, fields) }
+        .associate { p ->
+            val raw = fields[p.name]?.value ?: (p.default ?: "").toString()
+            val value: Any = when (p.type) {
+                ParameterType.SPIN -> raw.toIntOrNull() ?: (p.default as? Number)?.toInt() ?: 0
+                ParameterType.CHECK -> raw.toBooleanStrictOrNull() ?: (p.default as? Boolean) ?: false
+                else -> raw
+            }
+            p.name to value
+        }
+}
+
+/** Renders a form field appropriate for the parameter's type. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ParameterField(param: ParameterDescriptor, state: MutableState<String>) {
+    when (param.type) {
+        ParameterType.COMBO -> {
+            val options = param.options ?: return
+            var expanded by remember { mutableStateOf(false) }
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+            ) {
+                OutlinedTextField(
+                    value = state.value,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(param.description) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                    modifier = Modifier.menuAnchor().width(300.dp),
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    options.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option) },
+                            onClick = { state.value = option; expanded = false },
+                        )
+                    }
+                }
+            }
+        }
+        ParameterType.CHECK -> {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.width(300.dp),
+            ) {
+                Checkbox(
+                    checked = state.value.toBooleanStrictOrNull() ?: false,
+                    onCheckedChange = { state.value = it.toString() },
+                )
+                Text(param.description)
+            }
+        }
+        ParameterType.SPIN -> {
+            OutlinedTextField(
+                value = state.value,
+                onValueChange = { state.value = it },
+                label = { Text(param.description) },
+                modifier = Modifier.width(300.dp),
+                singleLine = true,
+            )
+        }
+        ParameterType.STRING -> {
+            OutlinedTextField(
+                value = state.value,
+                onValueChange = { state.value = it },
+                label = { Text(param.description) },
+                modifier = Modifier.width(300.dp),
+                singleLine = true,
+            )
+        }
+    }
+    Spacer(Modifier.height(4.dp))
 }
 
 @Composable
