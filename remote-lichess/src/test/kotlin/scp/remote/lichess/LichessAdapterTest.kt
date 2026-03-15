@@ -89,7 +89,7 @@ class LichessAdapterTest {
         adapter: LichessAdapter,
     ) {
         configureAdapter(api, adapter)
-        adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 1, "time" to 10, "increment" to 0))
+        adapter.seekGame(mapOf("opponent_type" to "Engine", "ai_level" to 1, "time" to 10, "increment" to 0))
     }
 
     // -- GetCapabilities --
@@ -114,7 +114,7 @@ class LichessAdapterTest {
         val caps = (adapter.getCapabilities() as Result.Success).value
         val opponentName = caps.seekParameters.first { it.name == "opponent_name" }
         assertEquals("opponent_type", opponentName.visibleWhen?.field)
-        assertEquals("friend", opponentName.visibleWhen?.equals)
+        assertEquals("Friend", opponentName.visibleWhen?.equals)
         assertTrue(opponentName.required)
     }
 
@@ -124,7 +124,7 @@ class LichessAdapterTest {
         val caps = (adapter.getCapabilities() as Result.Success).value
         val aiLevel = caps.seekParameters.first { it.name == "ai_level" }
         assertEquals("opponent_type", aiLevel.visibleWhen?.field)
-        assertEquals("ai", aiLevel.visibleWhen?.equals)
+        assertEquals("Engine", aiLevel.visibleWhen?.equals)
     }
 
     @Test
@@ -133,7 +133,7 @@ class LichessAdapterTest {
         val caps = (adapter.getCapabilities() as Result.Success).value
         val rated = caps.seekParameters.first { it.name == "rated" }
         assertEquals("opponent_type", rated.visibleWhen?.field)
-        assertEquals(listOf("random", "friend"), rated.visibleWhen?.oneOf)
+        assertEquals(listOf("Random opponent", "Friend"), rated.visibleWhen?.oneOf)
     }
 
     @Test
@@ -203,7 +203,7 @@ class LichessAdapterTest {
         configureAdapter(api, adapter)
         advanceUntilIdle()
 
-        adapter.seekGame(mapOf("opponent_type" to "random", "time" to 15, "increment" to 10, "rated" to true, "color" to "white"))
+        adapter.seekGame(mapOf("opponent_type" to "Random opponent", "time" to 15, "increment" to 10, "rated" to true, "color" to "white"))
         advanceUntilIdle()
 
         val params = api.lastSeekParams
@@ -240,7 +240,7 @@ class LichessAdapterTest {
         configureAdapter(api, adapter)
         advanceUntilIdle()
 
-        adapter.seekGame(mapOf("opponent_type" to "friend", "opponent_name" to "friend123", "time" to 15, "increment" to 10, "rated" to false))
+        adapter.seekGame(mapOf("opponent_type" to "Friend", "opponent_name" to "friend123", "time" to 15, "increment" to 10, "rated" to false))
         advanceUntilIdle()
 
         assertNull(api.lastSeekParams, "Should not create a seek when opponent_type is friend")
@@ -261,7 +261,7 @@ class LichessAdapterTest {
         configureAdapter(api, adapter)
         advanceUntilIdle()
 
-        val result = adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 6, "time" to 15, "increment" to 10, "color" to "black"))
+        val result = adapter.seekGame(mapOf("opponent_type" to "Engine", "ai_level" to 6, "time" to 15, "increment" to 10, "color" to "black"))
         assertIs<Result.Success<Unit>>(result)
 
         assertNull(api.lastSeekParams, "Should not create a seek for AI")
@@ -282,7 +282,7 @@ class LichessAdapterTest {
         val adapter = LichessAdapter(this, api)
         configureAdapter(api, adapter)
 
-        val result = adapter.seekGame(mapOf("opponent_type" to "friend", "opponent_name" to "friend123", "time" to 3))
+        val result = adapter.seekGame(mapOf("opponent_type" to "Friend", "opponent_name" to "friend123", "time" to 3))
         assertIs<Result.Failure<RemoteError>>(result)
         assertIs<RemoteError.InvalidParams>(result.error)
 
@@ -295,7 +295,7 @@ class LichessAdapterTest {
         val adapter = LichessAdapter(this, api)
         configureAdapter(api, adapter)
 
-        val result = adapter.seekGame(mapOf("opponent_type" to "ai", "ai_level" to 4, "time" to 3))
+        val result = adapter.seekGame(mapOf("opponent_type" to "Engine", "ai_level" to 4, "time" to 3))
         assertIs<Result.Failure<RemoteError>>(result)
         assertIs<RemoteError.InvalidParams>(result.error)
 

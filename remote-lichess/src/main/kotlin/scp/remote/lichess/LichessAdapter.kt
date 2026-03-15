@@ -24,7 +24,8 @@ private fun debugLog(msg: String) {
  *
  * 1. **Event stream** — Opened once after [configure] and kept alive for the session.
  *    Receives account-wide notifications such as `gameStart` and `gameFinish`.
- *    When a `gameStart` arrives, the adapter automatically opens a game stream.
+ *    When a `gameStart` arrives for a game the adapter is actively seeking (see [seekGame]),
+ *    it opens a game stream. Stale `gameStart` events from pre-existing games are ignored.
  *
  * 2. **Game stream** — Opened per game. The first message is a `gameFull` containing the
  *    complete game setup (players, clocks, initial position). Subsequent `gameState` messages
@@ -104,15 +105,15 @@ class LichessAdapter(
                         name = "opponent_type",
                         type = ParameterType.COMBO,
                         description = "Type of opponent",
-                        default = "random",
-                        options = listOf("random", "friend", "ai"),
+                        default = "Random opponent",
+                        options = listOf("Random opponent", "Friend", "Engine"),
                     ),
                     ParameterDescriptor(
                         name = "opponent_name",
                         type = ParameterType.STRING,
                         description = "Lichess username to challenge",
                         required = true,
-                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "friend"),
+                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "Friend"),
                     ),
                     ParameterDescriptor(
                         name = "ai_level",
@@ -121,7 +122,7 @@ class LichessAdapter(
                         min = 1,
                         max = 8,
                         default = 4,
-                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "ai"),
+                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "Engine"),
                     ),
                     ParameterDescriptor(
                         name = "time",
@@ -144,14 +145,14 @@ class LichessAdapter(
                         type = ParameterType.CHECK,
                         description = "Play a rated game",
                         default = false,
-                        visibleWhen = VisibleWhen(field = "opponent_type", oneOf = listOf("random", "friend")),
+                        visibleWhen = VisibleWhen(field = "opponent_type", oneOf = listOf("Random opponent", "Friend")),
                     ),
                     ParameterDescriptor(
                         name = "color",
                         type = ParameterType.COMBO,
-                        description = "Preferred color",
-                        default = "random",
-                        options = listOf("random", "white", "black"),
+                        description = "Your color",
+                        default = "Random",
+                        options = listOf("Random", "White", "Black"),
                     ),
                 ),
             )
@@ -164,7 +165,8 @@ class LichessAdapter(
      * Validates the token by calling `GET /api/account`. On success, opens the account-wide
      * event stream to listen for game starts.
      *
-     * @param settings Must contain `"api_token"` (a Lichess personal token with `board:play` scope).
+     * @param settings Must contain `"api_token"` (a Lichess personal token with `board:play` scope;
+     *   `challenge:write` is also needed for AI challenges).
      */
     override suspend fun configure(settings: Map<String, Any>): Result<RemoteError, ConfigureResult> {
         val apiToken = settings["api_token"] as? String
@@ -194,13 +196,15 @@ class LichessAdapter(
     /**
      * Starts looking for a game based on the selected opponent type.
      *
-     * - `"random"` (default): Creates an open seek via `POST /api/board/seek`.
-     * - `"friend"`: Challenges a specific user via `POST /api/challenge/{username}`.
-     * - `"ai"`: Challenges the Lichess Stockfish AI via `POST /api/challenge/ai`.
+     * - `"Random opponent"` (default): Creates an open seek via `POST /api/board/seek`.
+     * - `"Friend"`: Challenges a specific user via `POST /api/challenge/{username}`.
+     * - `"Engine"`: Challenges the Lichess Stockfish AI via `POST /api/challenge/ai`.
      *
-     * For `random` and `friend`, a streaming connection stays alive until matched/accepted.
-     * For `ai`, the game starts immediately. In all cases, the actual game start notification
-     * arrives via the event stream.
+     * For `"Random opponent"` and `"Friend"`, a streaming connection stays alive until
+     * matched/accepted. For `"Engine"`, the game starts immediately. In all cases, the actual
+     * game start notification arrives via the event stream.
+     *
+     * Color values are lowercased before being sent to the Lichess API (e.g. `"White"` → `"white"`).
      *
      * @param settings Seek parameters: `opponent_type`, `time`, `increment`, `color`,
      *   and conditionally `opponent_name`, `ai_level`, `rated`.
@@ -212,7 +216,7 @@ class LichessAdapter(
         val time = (settings["time"] as? Number)?.toInt() ?: 15
         val increment = (settings["increment"] as? Number)?.toInt() ?: 10
         val rated = settings["rated"] as? Boolean ?: false
-        val color = settings["color"] as? String ?: "random"
+        val color = (settings["color"] as? String)?.lowercase() ?: "random"
 
         if (time < MIN_SEEK_TIME_MINUTES) {
             return Result.Failure(
@@ -225,7 +229,7 @@ class LichessAdapter(
         awaitingGame = true
 
         when (opponentType) {
-            "ai" -> {
+            "Engine" -> {
                 val level = (settings["ai_level"] as? Number)?.toInt() ?: 4
                 try {
                     api.challengeAi(t, level, time, increment, color)
@@ -238,7 +242,7 @@ class LichessAdapter(
                 seekJob = scope.launch {
                     try {
                         val stream = when (opponentType) {
-                            "friend" -> {
+                            "Friend" -> {
                                 val opponent = settings["opponent_name"] as? String
                                     ?: return@launch _errors.emit(
                                         RemoteErrorEvent("INVALID_PARAMS", "opponent_name is required for friend challenges")
@@ -253,7 +257,7 @@ class LichessAdapter(
                         // game start notifications arrive via the event stream, not this stream.
                         stream.collect {}
                     } catch (e: Exception) {
-                        val action = if (opponentType == "friend") "Challenge" else "Seek"
+                        val action = if (opponentType == "Friend") "Challenge" else "Seek"
                         _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", "$action failed: ${e.message}"))
                     }
                 }

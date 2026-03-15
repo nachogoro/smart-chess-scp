@@ -14,15 +14,18 @@ import kotlinx.coroutines.flow.Flow
  *   `gameFull` message with the complete game state, then sends `gameState` messages after each
  *   move or status change (draw offers, resignation, checkmate, etc.).
  *
- * - **Seek / Challenge** ([createSeek], [createChallenge]): Streaming POST endpoints that stay open
- *   until the seek is matched or the challenge is accepted/declined. The actual game start
- *   notification arrives via the event stream, not these endpoints.
+ * - **Seek / Challenge** ([createSeek], [createChallenge], [challengeAi]): Endpoints that initiate
+ *   a game. [createSeek] and [createChallenge] are streaming POST endpoints that stay open until
+ *   the seek is matched or the challenge is accepted/declined. [challengeAi] is a one-shot POST
+ *   that starts the game immediately. In all cases, the actual game start notification arrives
+ *   via the event stream.
  *
  * - **Game actions** ([makeMove], [resign], [offerDraw], [respondDraw], [abort]): One-shot POST
  *   calls that perform an action on an active game.
  *
- * All endpoints require a personal API token with the `board:play` scope. All streaming endpoints
- * return `Flow<String>` where each element is a single NDJSON line.
+ * All endpoints require a personal API token with the `board:play` scope. [challengeAi] also
+ * requires the `challenge:write` scope. All streaming endpoints return `Flow<String>` where
+ * each element is a single NDJSON line.
  *
  * This interface exists to allow test fakes to replace the real HTTP implementation.
  */
