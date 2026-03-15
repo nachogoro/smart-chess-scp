@@ -17,6 +17,7 @@ class FakeLichessApi : LichessApi {
     var lastResignedGame: String? = null
     var lastDrawAction: Pair<String, Boolean>? = null // gameId to accept
     var lastChallengeParams: ChallengeParams? = null
+    var lastAiChallengeParams: AiChallengeParams? = null
 
     val eventStreamChannel = Channel<String>(Channel.UNLIMITED)
     val gameStreamChannel = Channel<String>(Channel.UNLIMITED)
@@ -25,6 +26,7 @@ class FakeLichessApi : LichessApi {
 
     data class SeekParams(val time: Int, val increment: Int, val rated: Boolean, val color: String)
     data class ChallengeParams(val username: String, val time: Int, val increment: Int, val rated: Boolean, val color: String)
+    data class AiChallengeParams(val level: Int, val time: Int, val increment: Int, val color: String)
 
     override suspend fun getAccount(token: String): LichessAccount {
         if (authShouldFail) throw LichessApiException(401, "Unauthorized")
@@ -58,6 +60,16 @@ class FakeLichessApi : LichessApi {
     ): Flow<String> {
         lastChallengeParams = ChallengeParams(username, time, increment, rated, color)
         return challengeChannel.consumeAsFlow()
+    }
+
+    override suspend fun challengeAi(
+        token: String,
+        level: Int,
+        time: Int,
+        increment: Int,
+        color: String,
+    ) {
+        lastAiChallengeParams = AiChallengeParams(level, time, increment, color)
     }
 
     override suspend fun makeMove(token: String, gameId: String, move: String) {

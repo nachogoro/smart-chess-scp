@@ -100,6 +100,26 @@ interface LichessApi {
     ): Flow<String>
 
     /**
+     * Challenges the Lichess Stockfish AI.
+     *
+     * Calls `POST /api/challenge/ai`. Unlike [createSeek] and [createChallenge],
+     * this is a one-shot call — the game starts immediately, and the game start
+     * notification arrives via the event stream.
+     *
+     * @param level Stockfish level (1–8).
+     * @param time Initial time in minutes.
+     * @param increment Increment per move in seconds.
+     * @param color Preferred color: `"random"`, `"white"`, or `"black"`.
+     */
+    suspend fun challengeAi(
+        token: String,
+        level: Int,
+        time: Int,
+        increment: Int,
+        color: String,
+    )
+
+    /**
      * Submits a move in the given game.
      *
      * Calls `POST /api/board/game/{gameId}/move/{move}`.

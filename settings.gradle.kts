@@ -8,5 +8,3 @@ include(":remote-lichess")
 include(":orchestrator")
 include(":board-fake")
 include(":desktop-app")
-
-includeBuild("../../simple-chess-kotlin")
