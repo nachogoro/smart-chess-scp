@@ -151,15 +151,35 @@ private fun EngineGameSetupForm(
     request: PendingRequest<ConfigureEngineGameParams, EngineGameConfig>,
     onBack: () -> Unit,
 ) {
+    val params = request.input
     var playerColor by remember { mutableStateOf(Color.WHITE) }
     var useTimeControl by remember { mutableStateOf(false) }
     var timeMinutes by remember { mutableStateOf("10") }
     var incrementSeconds by remember { mutableStateOf("0") }
 
-    SetupErrorBanner(request.input.errorMessage)
+    val engineFields = remember(params) {
+        params.parameters.associate { p ->
+            val default = (p.default ?: "").toString()
+            p.name to mutableStateOf(default)
+        }
+    }
 
-    Text("Playing against: ${request.input.engineName}", style = MaterialTheme.typography.titleMedium)
+    SetupErrorBanner(params.errorMessage)
+
+    Text("Playing against: ${params.engineName}", style = MaterialTheme.typography.titleMedium)
     Spacer(Modifier.height(16.dp))
+
+    if (engineFields.isNotEmpty()) {
+        Text("Engine Settings", style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(8.dp))
+        params.parameters.forEach { p ->
+            val state = engineFields[p.name] ?: return@forEach
+            if (isParameterVisible(p, engineFields)) {
+                ParameterField(p, state)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+    }
 
     Text("Play as:", style = MaterialTheme.typography.labelLarge)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -194,9 +214,20 @@ private fun EngineGameSetupForm(
                 val inc = incrementSeconds.toLongOrNull() ?: 0
                 TimeControl(type = TimeControlType.FISCHER, initialMs = mins * 60_000, incrementMs = inc * 1000)
             } else null
+            val engineSettings = params.parameters
+                .filter { isParameterVisible(it, engineFields) }
+                .associate { p ->
+                    val raw = engineFields[p.name]?.value ?: (p.default ?: "").toString()
+                    val value: Any = when (p.type) {
+                        ParameterType.SPIN -> raw.toIntOrNull() ?: (p.default as? Number)?.toInt() ?: 0
+                        ParameterType.CHECK -> raw.toBooleanStrictOrNull() ?: (p.default as? Boolean) ?: false
+                        else -> raw
+                    }
+                    p.name to value
+                }
             request.complete(EngineGameConfig(
                 playerColor = playerColor,
-                engineSettings = emptyMap(),
+                engineSettings = engineSettings,
                 timeControl = tc,
             ))
         }) { Text("Start Game") }
