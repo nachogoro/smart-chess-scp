@@ -26,7 +26,20 @@ class Orchestrator(
         scope = this
         launchCollectors()
         for (event in eventChannel) {
-            handleEvent(event)
+            try {
+                handleEvent(event)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Don't let a single event crash the event loop.
+                // Reset to idle so the orchestrator can accept new games.
+                stopModuleCollectors()
+                session = null
+                state = OrchestratorState.Idle
+                try {
+                    ui.displayError("Unexpected error: ${e.message}")
+                } catch (_: Exception) {}
+            }
         }
         coroutineContext.cancelChildren()
     }
@@ -72,6 +85,15 @@ class Orchestrator(
     }
 
     private suspend fun handleEvent(event: OrchestratorEvent) {
+        // NewGameRequested is always handled — clean up any active state first
+        if (event is OrchestratorEvent.NewGameRequested && state !is OrchestratorState.Idle) {
+            session?.remote?.cancelSeek()
+            stopModuleCollectors()
+            session = null
+            state = OrchestratorState.Idle
+            // Fall through to handleIdle which will call runSetup()
+        }
+
         // Global interrupts — checked first when a game is active
         if (session != null) {
             when (event) {

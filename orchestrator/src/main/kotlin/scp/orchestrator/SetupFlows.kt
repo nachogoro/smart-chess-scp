@@ -23,44 +23,48 @@ internal suspend fun Orchestrator.runSetup() {
 }
 
 internal suspend fun Orchestrator.setupLocal() {
-    val config = ui.configureLocalGame().getOrNull() ?: return
+    var errorMessage: String? = null
 
-    val boardCaps = board.getCapabilities().getOrNull() ?: run {
-        ui.displayError("Failed to read board capabilities")
+    while (true) {
+        val config = ui.configureLocalGame(errorMessage).getOrNull() ?: return
+
+        val boardCaps = board.getCapabilities().getOrNull()
+        if (boardCaps == null) {
+            errorMessage = "Failed to read board capabilities"
+            continue
+        }
+
+        val createResult = gameController.create(CreateGameParams(
+            timeControl = config.timeControl,
+            whiteName = config.whiteName,
+            blackName = config.blackName,
+        ))
+        if (createResult is Result.Failure) {
+            errorMessage = "Failed to create game: ${createResult.error.message}"
+            continue
+        }
+        val gameId = (createResult as Result.Success).value.gameId
+
+        session = GameSession(
+            gameId = gameId,
+            mode = GameMode.LOCAL,
+            boardLevel = boardCaps.level,
+            timeControl = config.timeControl,
+            whiteName = config.whiteName,
+            blackName = config.blackName,
+        )
+        notifyGameStarted(GameStartedInfo(
+            gameId = gameId,
+            mode = GameMode.LOCAL,
+            playerColor = null,
+            timeControl = config.timeControl,
+            whiteName = config.whiteName,
+            blackName = config.blackName,
+            initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        ))
+        transitionToAwaitingMove()
         return
     }
-
-    val createResult = gameController.create(CreateGameParams(
-        timeControl = config.timeControl,
-        whiteName = config.whiteName,
-        blackName = config.blackName,
-    ))
-    val gameId = when (createResult) {
-        is Result.Failure -> {
-            ui.displayError("Failed to create game: ${createResult.error.message}")
-            return
-        }
-        is Result.Success -> createResult.value.gameId
-    }
-
-    session = GameSession(
-        gameId = gameId,
-        mode = GameMode.LOCAL,
-        boardLevel = boardCaps.level,
-        timeControl = config.timeControl,
-        whiteName = config.whiteName,
-        blackName = config.blackName,
-    )
-    notifyGameStarted(GameStartedInfo(
-        gameId = gameId,
-        mode = GameMode.LOCAL,
-        playerColor = null,
-        timeControl = config.timeControl,
-        whiteName = config.whiteName,
-        blackName = config.blackName,
-        initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    ))
-    transitionToAwaitingMove()
 }
 
 internal suspend fun Orchestrator.setupEngine() {
@@ -71,53 +75,60 @@ internal suspend fun Orchestrator.setupEngine() {
         return
     }
 
-    val config = ui.configureEngineGame(ConfigureEngineGameParams(
+    val baseParams = ConfigureEngineGameParams(
         engineName = caps.name,
         parameters = caps.parameters,
-    )).getOrNull() ?: return
-
-    eng.configure(config.engineSettings).getOrNull() ?: run {
-        ui.displayError("Failed to configure engine")
-        return
-    }
-
-    val boardCaps = board.getCapabilities().getOrNull() ?: run {
-        ui.displayError("Failed to read board capabilities")
-        return
-    }
-
-    val createResult = gameController.create(CreateGameParams(
-        timeControl = config.timeControl,
-    ))
-    val gameId = when (createResult) {
-        is Result.Failure -> {
-            ui.displayError("Failed to create game: ${createResult.error.message}")
-            return
-        }
-        is Result.Success -> createResult.value.gameId
-    }
-
-    eng.newGame()
-
-    session = GameSession(
-        gameId = gameId,
-        mode = GameMode.ENGINE,
-        boardLevel = boardCaps.level,
-        playerColor = config.playerColor,
-        timeControl = config.timeControl,
-        engine = eng,
     )
-    notifyGameStarted(GameStartedInfo(
-        gameId = gameId,
-        mode = GameMode.ENGINE,
-        playerColor = config.playerColor,
-        timeControl = config.timeControl,
-        whiteName = null,
-        blackName = null,
-        initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-    ))
-    startModuleCollectors(session!!)
-    transitionToAwaitingMove()
+    var errorMessage: String? = null
+
+    while (true) {
+        val config = ui.configureEngineGame(
+            baseParams.copy(errorMessage = errorMessage)
+        ).getOrNull() ?: return
+
+        if (eng.configure(config.engineSettings) is Result.Failure) {
+            errorMessage = "Failed to configure engine"
+            continue
+        }
+
+        val boardCaps = board.getCapabilities().getOrNull()
+        if (boardCaps == null) {
+            errorMessage = "Failed to read board capabilities"
+            continue
+        }
+
+        val createResult = gameController.create(CreateGameParams(
+            timeControl = config.timeControl,
+        ))
+        if (createResult is Result.Failure) {
+            errorMessage = "Failed to create game: ${createResult.error.message}"
+            continue
+        }
+        val gameId = (createResult as Result.Success).value.gameId
+
+        eng.newGame()
+
+        session = GameSession(
+            gameId = gameId,
+            mode = GameMode.ENGINE,
+            boardLevel = boardCaps.level,
+            playerColor = config.playerColor,
+            timeControl = config.timeControl,
+            engine = eng,
+        )
+        notifyGameStarted(GameStartedInfo(
+            gameId = gameId,
+            mode = GameMode.ENGINE,
+            playerColor = config.playerColor,
+            timeControl = config.timeControl,
+            whiteName = null,
+            blackName = null,
+            initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        ))
+        startModuleCollectors(session!!)
+        transitionToAwaitingMove()
+        return
+    }
 }
 
 internal suspend fun Orchestrator.setupRemote() {
@@ -128,35 +139,45 @@ internal suspend fun Orchestrator.setupRemote() {
         return
     }
 
-    val config = ui.configureRemoteGame(ConfigureRemoteGameParams(
+    val baseParams = ConfigureRemoteGameParams(
         platform = caps.platform,
         parameters = caps.parameters,
         seekParameters = caps.seekParameters,
-    )).getOrNull() ?: return
-
-    rem.configure(config.platformSettings).getOrNull() ?: run {
-        ui.displayError("Failed to configure remote platform")
-        return
-    }
-
-    val boardCaps = board.getCapabilities().getOrNull() ?: run {
-        ui.displayError("Failed to read board capabilities")
-        return
-    }
-
-    rem.seekGame(config.seekSettings).getOrNull() ?: run {
-        ui.displayError("Failed to seek game")
-        return
-    }
-
-    session = GameSession(
-        gameId = "", // Will be set when game starts
-        mode = GameMode.REMOTE,
-        boardLevel = boardCaps.level,
-        remote = rem,
     )
-    startModuleCollectors(session!!)
-    state = OrchestratorState.SeekingGame
+    var errorMessage: String? = null
+
+    while (true) {
+        val config = ui.configureRemoteGame(
+            baseParams.copy(errorMessage = errorMessage)
+        ).getOrNull() ?: return
+
+        if (rem.configure(config.platformSettings) is Result.Failure) {
+            errorMessage = "Failed to configure remote platform"
+            continue
+        }
+
+        val boardCaps = board.getCapabilities().getOrNull()
+        if (boardCaps == null) {
+            errorMessage = "Failed to read board capabilities"
+            continue
+        }
+
+        if (rem.seekGame(config.seekSettings) is Result.Failure) {
+            errorMessage = "Failed to seek game"
+            continue
+        }
+
+        session = GameSession(
+            gameId = "", // Will be set when game starts
+            mode = GameMode.REMOTE,
+            boardLevel = boardCaps.level,
+            remote = rem,
+        )
+        startModuleCollectors(session!!)
+        state = OrchestratorState.SeekingGame
+        ui.onSeekingGame()
+        return
+    }
 }
 
 private suspend fun Orchestrator.selectEngine(): EngineAdapterModule? {

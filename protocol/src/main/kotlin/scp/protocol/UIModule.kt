@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.SharedFlow
 interface UIModule {
     // Game setup
     suspend fun selectGameMode(availableModes: List<GameMode>): Result<UIError, GameMode>
-    suspend fun configureLocalGame(): Result<UIError, LocalGameConfig>
+    suspend fun configureLocalGame(errorMessage: String? = null): Result<UIError, LocalGameConfig>
     suspend fun selectEngine(engines: List<EngineInfo>): Result<UIError, String>
     suspend fun configureEngineGame(params: ConfigureEngineGameParams): Result<UIError, EngineGameConfig>
     suspend fun selectRemotePlatform(platforms: List<PlatformInfo>): Result<UIError, String>
@@ -17,6 +17,7 @@ interface UIModule {
     suspend fun promptDrawResponse(gameId: String, from: String): Result<UIError, Boolean>
 
     // Notifications (one-way, no response expected)
+    suspend fun onSeekingGame()
     suspend fun onGameStarted(info: GameStartedInfo)
     suspend fun onGameEnded(summary: GameSummary)
     suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit>
@@ -44,6 +45,7 @@ data class LocalGameConfig(
 data class ConfigureEngineGameParams(
     val engineName: String,
     val parameters: List<ParameterDescriptor>,
+    val errorMessage: String? = null,
 )
 
 data class EngineGameConfig(
@@ -56,6 +58,7 @@ data class ConfigureRemoteGameParams(
     val platform: String,
     val parameters: List<ParameterDescriptor>,
     val seekParameters: List<ParameterDescriptor>,
+    val errorMessage: String? = null,
 )
 
 data class RemoteGameConfig(

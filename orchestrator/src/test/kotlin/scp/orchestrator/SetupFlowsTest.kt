@@ -93,33 +93,40 @@ class SetupFlowsTest {
     }
 
     @Test
-    fun `board capabilities fail during local setup shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `board capabilities fail during local setup re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator()
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
         board.failWith = BoardError.Disconnected()
+        // First call succeeds (triggers error), second call cancelled by user
+        ui.configureLocalGameResponses = mutableListOf(
+            Result.Success(LocalGameConfig("White", "Black", null)),
+        )
+        ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastError)
+        assertEquals("Failed to read board capabilities", ui.lastConfigureLocalError)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
 
     @Test
-    fun `game creation fails during local setup shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `game creation fails during local setup re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator()
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
         gc.createFail = GameError.GameNotFound("Creation failed")
+        ui.configureLocalGameResponses = mutableListOf(
+            Result.Success(LocalGameConfig("White", "Black", null)),
+        )
+        ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to create game: Creation failed", ui.lastError)
+        assertEquals("Failed to create game: Creation failed", ui.lastConfigureLocalError)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
@@ -188,39 +195,39 @@ class SetupFlowsTest {
     }
 
     @Test
-    fun `board capabilities fail during engine setup shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `board capabilities fail during engine setup re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withEngine = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
-        ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        ui.configureEngineGameResponses = mutableListOf(
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
         )
+        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastError)
+        assertEquals("Failed to read board capabilities", ui.lastConfigureEngineParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
 
     @Test
-    fun `game creation fails during engine setup shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `game creation fails during engine setup re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withEngine = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
-        ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        ui.configureEngineGameResponses = mutableListOf(
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
         )
+        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         gc.createFail = GameError.GameNotFound("Creation failed")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to create game: Creation failed", ui.lastError)
+        assertEquals("Failed to create game: Creation failed", ui.lastConfigureEngineParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
@@ -242,20 +249,20 @@ class SetupFlowsTest {
     }
 
     @Test
-    fun `engine configure fails shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `engine configure fails re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withEngine = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
-        ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        ui.configureEngineGameResponses = mutableListOf(
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
         )
+        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         engine.configureFail = EngineError.NotConfigured("Bad settings")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to configure engine", ui.lastError)
+        assertEquals("Failed to configure engine", ui.lastConfigureEngineParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
@@ -344,17 +351,20 @@ class SetupFlowsTest {
     }
 
     @Test
-    fun `board capabilities fail during remote setup shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `board capabilities fail during remote setup re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withRemote = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
+        ui.configureRemoteGameResponses = mutableListOf(
+            Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
+        )
+        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastError)
+        assertEquals("Failed to read board capabilities", ui.lastConfigureRemoteParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
@@ -376,33 +386,39 @@ class SetupFlowsTest {
     }
 
     @Test
-    fun `remote configure fails shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `remote configure fails re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withRemote = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
+        ui.configureRemoteGameResponses = mutableListOf(
+            Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
+        )
+        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
         remote.configureFail = RemoteError.AuthFailed()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to configure remote platform", ui.lastError)
+        assertEquals("Failed to configure remote platform", ui.lastConfigureRemoteParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }
 
     @Test
-    fun `seek game fails shows error`() = runTest(UnconfinedTestDispatcher()) {
+    fun `seek game fails re-prompts with error`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = createOrchestrator(withRemote = true)
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
+        ui.configureRemoteGameResponses = mutableListOf(
+            Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
+        )
+        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
         remote.seekFail = RemoteError.InvalidParams("Bad seek params")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to seek game", ui.lastError)
+        assertEquals("Failed to seek game", ui.lastConfigureRemoteParams?.errorMessage)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
-        assertNull(orchestrator.session)
 
         orchestrator.stop()
     }

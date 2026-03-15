@@ -149,17 +149,21 @@ class FakeUIModule : UIModule {
     override val drawRequested: SharedFlow<DrawRequestedEvent> = _drawRequested
     override val abortRequested: SharedFlow<AbortRequestedEvent> = _abortRequested
 
-    // Configurable responses
+    // Configurable responses — use the list variants to return different values on retries.
+    // When a list is set, responses are popped from the front; when empty, Cancelled is returned.
     var selectGameModeResponse: Result<UIError, GameMode> = Result.Success(GameMode.LOCAL)
     var configureLocalGameResponse: Result<UIError, LocalGameConfig> = Result.Success(
         LocalGameConfig(whiteName = "White", blackName = "Black", timeControl = null)
     )
+    var configureLocalGameResponses: MutableList<Result<UIError, LocalGameConfig>>? = null
     var configureEngineGameResponse: Result<UIError, EngineGameConfig> = Result.Success(
         EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
     )
+    var configureEngineGameResponses: MutableList<Result<UIError, EngineGameConfig>>? = null
     var configureRemoteGameResponse: Result<UIError, RemoteGameConfig> = Result.Success(
         RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())
     )
+    var configureRemoteGameResponses: MutableList<Result<UIError, RemoteGameConfig>>? = null
     var promptPromotionResponse: Result<UIError, PromotionPiece> = Result.Success(PromotionPiece.QUEEN)
     var promptDisambiguationResponse: Result<UIError, String> = Result.Success("")
     var promptDrawResponseResult: Result<UIError, Boolean> = Result.Success(false)
@@ -174,17 +178,36 @@ class FakeUIModule : UIModule {
     var lastDesync: Pair<String, String>? = null
     var displayErrorCount = 0
 
+    var lastConfigureLocalError: String? = null
+    var lastConfigureEngineParams: ConfigureEngineGameParams? = null
+    var lastConfigureRemoteParams: ConfigureRemoteGameParams? = null
+
     override suspend fun selectGameMode(availableModes: List<GameMode>) = selectGameModeResponse
-    override suspend fun configureLocalGame() = configureLocalGameResponse
+    override suspend fun configureLocalGame(errorMessage: String?): Result<UIError, LocalGameConfig> {
+        lastConfigureLocalError = errorMessage
+        return configureLocalGameResponses?.removeFirstOrNull() ?: configureLocalGameResponse
+    }
     override suspend fun selectEngine(engines: List<EngineInfo>) = selectEngineResponse
-    override suspend fun configureEngineGame(params: ConfigureEngineGameParams) = configureEngineGameResponse
+    override suspend fun configureEngineGame(params: ConfigureEngineGameParams): Result<UIError, EngineGameConfig> {
+        lastConfigureEngineParams = params
+        return configureEngineGameResponses?.removeFirstOrNull() ?: configureEngineGameResponse
+    }
     override suspend fun selectRemotePlatform(platforms: List<PlatformInfo>) = selectRemotePlatformResponse
-    override suspend fun configureRemoteGame(params: ConfigureRemoteGameParams) = configureRemoteGameResponse
+    override suspend fun configureRemoteGame(params: ConfigureRemoteGameParams): Result<UIError, RemoteGameConfig> {
+        lastConfigureRemoteParams = params
+        return configureRemoteGameResponses?.removeFirstOrNull() ?: configureRemoteGameResponse
+    }
 
     override suspend fun promptPromotion(move: String, color: Color) = promptPromotionResponse
     override suspend fun promptMoveDisambiguation(moves: List<String>, color: Color) = promptDisambiguationResponse
 
     override suspend fun promptDrawResponse(gameId: String, from: String) = promptDrawResponseResult
+
+    var seekingGameNotified = false
+
+    override suspend fun onSeekingGame() {
+        seekingGameNotified = true
+    }
 
     override suspend fun onGameStarted(info: GameStartedInfo) {
         lastGameStartedInfo = info

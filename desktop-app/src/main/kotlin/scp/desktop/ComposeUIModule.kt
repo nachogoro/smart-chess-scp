@@ -14,7 +14,7 @@ class ComposeUIModule : UIModule {
 
     var pendingGameModeSelection by mutableStateOf<PendingRequest<List<GameMode>, GameMode>?>(null)
         private set
-    var pendingLocalGameConfig by mutableStateOf<PendingRequest<Unit, LocalGameConfig>?>(null)
+    var pendingLocalGameConfig by mutableStateOf<PendingRequest<String?, LocalGameConfig>?>(null)
         private set
     var pendingEngineSelection by mutableStateOf<PendingRequest<List<EngineInfo>, String>?>(null)
         private set
@@ -36,6 +36,8 @@ class ComposeUIModule : UIModule {
     var lastError by mutableStateOf<String?>(null)
         private set
     var desyncInfo by mutableStateOf<DesyncInfo?>(null)
+        private set
+    var isSeeking by mutableStateOf(false)
         private set
     var lastGameStartedInfo by mutableStateOf<GameStartedInfo?>(null)
         private set
@@ -72,9 +74,9 @@ class ComposeUIModule : UIModule {
         }
     }
 
-    override suspend fun configureLocalGame(): Result<UIError, LocalGameConfig> {
+    override suspend fun configureLocalGame(errorMessage: String?): Result<UIError, LocalGameConfig> {
         val deferred = CompletableDeferred<LocalGameConfig>()
-        pendingLocalGameConfig = PendingRequest(Unit, deferred)
+        pendingLocalGameConfig = PendingRequest(errorMessage, deferred)
         return try {
             Result.Success(deferred.await())
         } catch (_: Exception) {
@@ -168,7 +170,12 @@ class ComposeUIModule : UIModule {
         }
     }
 
+    override suspend fun onSeekingGame() {
+        isSeeking = true
+    }
+
     override suspend fun onGameStarted(info: GameStartedInfo) {
+        isSeeking = false
         lastGameStartedInfo = info
     }
 
@@ -204,6 +211,21 @@ class ComposeUIModule : UIModule {
     fun clearOpponentMove() { lastOpponentMove = null }
     fun clearGameStartedInfo() { lastGameStartedInfo = null }
     fun clearGameSummary() { lastGameSummary = null }
+
+    /**
+     * Cancels all pending setup requests, causing the orchestrator's setup flow
+     * to unwind (each suspended `configureXxx()` call returns `Cancelled`).
+     * Called when the user navigates away from the setup screen.
+     */
+    fun cancelAllPendingRequests() {
+        isSeeking = false
+        pendingGameModeSelection?.cancel()
+        pendingLocalGameConfig?.cancel()
+        pendingEngineSelection?.cancel()
+        pendingEngineGameConfig?.cancel()
+        pendingRemotePlatformSelection?.cancel()
+        pendingRemoteGameConfig?.cancel()
+    }
 }
 
 data class PendingRequest<I, O>(

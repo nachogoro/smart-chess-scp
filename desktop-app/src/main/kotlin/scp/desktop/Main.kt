@@ -50,44 +50,42 @@ fun App() {
 
     val appScope = rememberCoroutineScope()
 
-    // Create modules
+    // Create modules — these live for the entire app lifetime
     val uiModule = remember { ComposeUIModule() }
     val board = remember { FakeBoard(boardFilePath) }
-    val gameControllerScope = remember { CoroutineScope(Dispatchers.Default) }
-    val gameController = remember { GameController(gameControllerScope) }
-    val lichessAdapter = remember { LichessAdapter(gameControllerScope) }
+    val moduleScope = remember { CoroutineScope(Dispatchers.Default) }
+    val gameController = remember { GameController(moduleScope) }
+    val lichessAdapter = remember { LichessAdapter(moduleScope) }
     val stockfishAdapter = remember { RemoteStockfishAdapter() }
 
-    // Track whether orchestrator is running
-    var orchestratorInstance by remember { mutableStateOf<Orchestrator?>(null) }
-
-    fun startOrchestrator(mode: GameMode) {
-        // Write an initial board file so FakeBoard.getCapabilities() succeeds during setup
-        boardFileManager.write(startingPosition(), settings.boardLevel)
-
-        val orchestrator = Orchestrator(
+    // Create and start the orchestrator once
+    val orchestrator = remember {
+        Orchestrator(
             board = board,
             gameController = gameController,
             ui = uiModule,
             engines = listOf(stockfishAdapter),
             remotes = listOf(lichessAdapter),
         )
-        orchestratorInstance = orchestrator
+    }
+    LaunchedEffect(Unit) {
+        orchestrator.start()
+    }
 
-        appScope.launch {
-            launch { orchestrator.start() }
-            uiModule.requestNewGame()
-        }
+    fun startGame(mode: GameMode) {
+        // Write an initial board file so FakeBoard.getCapabilities() succeeds during setup
+        boardFileManager.write(startingPosition(), settings.boardLevel)
 
+        appScope.launch { uiModule.requestNewGame() }
         appState.gameSetupMode = mode
         appState.screen = Screen.GAME_SETUP
     }
 
     when (appState.screen) {
         Screen.MAIN_MENU -> MainMenuScreen(
-            onLocalGame = { startOrchestrator(GameMode.LOCAL) },
-            onEngineGame = { startOrchestrator(GameMode.ENGINE) },
-            onRemoteGame = { startOrchestrator(GameMode.REMOTE) },
+            onLocalGame = { startGame(GameMode.LOCAL) },
+            onEngineGame = { startGame(GameMode.ENGINE) },
+            onRemoteGame = { startGame(GameMode.REMOTE) },
             onSettings = { appState.screen = Screen.SETTINGS },
         )
 
@@ -102,42 +100,31 @@ fun App() {
         )
 
         Screen.GAME_SETUP -> {
-            val orchestrator = orchestratorInstance
-            if (orchestrator != null) {
-                GameSetupScreen(
-                    mode = appState.gameSetupMode ?: GameMode.LOCAL,
-                    settings = settings,
-                    uiModule = uiModule,
-                    onBack = {
-                        orchestrator.stop()
-                        orchestratorInstance = null
-                        appState.screen = Screen.MAIN_MENU
-                    },
-                )
+            GameSetupScreen(
+                mode = appState.gameSetupMode ?: GameMode.LOCAL,
+                settings = settings,
+                uiModule = uiModule,
+                onBack = {
+                    uiModule.cancelAllPendingRequests()
+                    appState.screen = Screen.MAIN_MENU
+                },
+            )
 
-                // React to game start notification
-                if (uiModule.lastGameStartedInfo != null) {
-                    uiModule.clearGameStartedInfo()
-                    appState.screen = Screen.GAME
-                }
+            // React to game start notification
+            if (uiModule.lastGameStartedInfo != null) {
+                uiModule.clearGameStartedInfo()
+                appState.screen = Screen.GAME
             }
         }
 
         Screen.GAME -> {
-            val orchestrator = orchestratorInstance
-            if (orchestrator != null) {
-                GameScreen(
-                    orchestrator = orchestrator,
-                    uiModule = uiModule,
-                    boardFileManager = boardFileManager,
-                    boardLevel = settings.boardLevel,
-                    onGameEnd = {
-                        orchestrator.stop()
-                        orchestratorInstance = null
-                        appState.screen = Screen.MAIN_MENU
-                    },
-                )
-            }
+            GameScreen(
+                orchestrator = orchestrator,
+                uiModule = uiModule,
+                boardFileManager = boardFileManager,
+                boardLevel = settings.boardLevel,
+                onGameEnd = { appState.screen = Screen.MAIN_MENU },
+            )
         }
     }
 }
