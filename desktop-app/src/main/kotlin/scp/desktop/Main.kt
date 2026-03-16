@@ -19,6 +19,7 @@ import scp.game.GameController
 import scp.orchestrator.Orchestrator
 import scp.protocol.GameMode
 import scp.remote.lichess.LichessAdapter
+import scp.engine.carballo.CarballoAdapter
 import scp.engine.remote.RemoteStockfishAdapter
 import java.nio.file.Path
 
@@ -57,6 +58,7 @@ fun App() {
     val gameController = remember { GameController(moduleScope) }
     val lichessAdapter = remember { LichessAdapter(moduleScope) }
     val stockfishAdapter = remember { RemoteStockfishAdapter() }
+    val carballoAdapter = remember { CarballoAdapter() }
 
     // Create and start the orchestrator once
     val orchestrator = remember {
@@ -64,7 +66,7 @@ fun App() {
             board = board,
             gameController = gameController,
             ui = uiModule,
-            engines = listOf(stockfishAdapter),
+            engines = listOf(carballoAdapter, stockfishAdapter),
             remotes = listOf(lichessAdapter),
         )
     }

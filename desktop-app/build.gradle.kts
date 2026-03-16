@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":game-controller"))
     implementation(project(":remote-lichess"))
     implementation(project(":engine-remote-stockfish"))
+    implementation(project(":engine-carballo"))
 
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
