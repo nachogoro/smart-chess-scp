@@ -10,12 +10,7 @@ import scp.protocol.*
 private const val STANDARD_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 private const val MIN_SEEK_TIME_MINUTES = 10
 
-/** Set to true to enable debug logging for the Lichess adapter. */
-var LICHESS_DEBUG = System.getenv("LICHESS_DEBUG")?.toBooleanStrictOrNull() ?: false
-
-private fun debugLog(msg: String) {
-    if (LICHESS_DEBUG) println("[lichess] $msg")
-}
+private fun debugLog(msg: String) = scp.protocol.debugLog("[lichess] $msg")
 
 /**
  * [RemoteAdapterModule] implementation for Lichess, using the Lichess Board API.

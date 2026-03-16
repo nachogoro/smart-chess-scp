@@ -1,6 +1,7 @@
 package scp.orchestrator
 
 import scp.protocol.*
+import scp.protocol.debugLog
 
 internal suspend fun Orchestrator.handleMoveReady() {
     val s = session ?: return
@@ -50,21 +51,25 @@ internal suspend fun Orchestrator.handleEngineMove() {
     val eng = s.engine ?: return
     val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
+    debugLog("[orchestrator] Requesting engine move: fen=${gameState.fen}")
+
     val bestMove = eng.getBestMove(GetBestMoveParams(
         fen = gameState.fen,
-        moves = gameState.moves,
     ))
 
     when (bestMove) {
         is Result.Failure -> {
+            debugLog("[orchestrator] Engine returned error: ${bestMove.error.code}: ${bestMove.error.message}")
             ui.displayError("Engine error: ${bestMove.error.message}")
             return
         }
         is Result.Success -> {
             val moveUci = bestMove.value.move
+            debugLog("[orchestrator] Engine suggested: $moveUci (score=${bestMove.value.score} depth=${bestMove.value.depth})")
             val submitResult = gameController.submitMove(SubmitMoveParams(gameId = s.gameId, move = moveUci))
             when (submitResult) {
                 is Result.Failure -> {
+                    debugLog("[orchestrator] Engine move REJECTED: move=$moveUci fen=${gameState.fen} error=${submitResult.error.message}")
                     ui.displayError("Engine move rejected: ${submitResult.error.message}")
                     return
                 }
