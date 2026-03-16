@@ -1,5 +1,8 @@
 package scp.engine.remote
 
+import com.nachogoro.simplechess.Game
+import com.nachogoro.simplechess.Move
+import com.nachogoro.simplechess.PieceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -82,11 +85,21 @@ class RemoteStockfishAdapter(
             return Result.Failure(EngineError.NotConfigured())
         }
 
+        // If moves are provided, replay them from the starting FEN to get the
+        // current position. The remote API is stateless and only accepts a FEN.
+        val moves = params.moves
+        val fen = if (!moves.isNullOrEmpty()) {
+            applyMoves(params.fen, moves)
+                ?: return Result.Failure(EngineError.InvalidPosition("Failed to replay moves from FEN"))
+        } else {
+            params.fen
+        }
+
         val requestDepth = params.maxDepth?.coerceIn(1, 18) ?: depth
         val requestTime = params.timeMs?.coerceIn(1, 100)?.toInt() ?: maxThinkingTimeMs
 
         val body = JSONObject().apply {
-            put("fen", params.fen)
+            put("fen", fen)
             put("depth", requestDepth)
             put("maxThinkingTime", requestTime)
         }
@@ -157,6 +170,29 @@ class RemoteStockfishAdapter(
         }
 
         return null
+    }
+
+    /** Replays UCI moves from a starting FEN, returning the resulting FEN or null on failure. */
+    private fun applyMoves(fen: String, moves: List<String>): String? {
+        var game = Game.fromFen(fen).getOrNull() ?: return null
+        for (uci in moves) {
+            val move = game.availableMoves.firstOrNull { moveToUci(it) == uci } ?: return null
+            game = game.makeMove(move).getOrNull() ?: return null
+        }
+        return game.currentPosition.fen
+    }
+
+    private fun moveToUci(move: Move): String {
+        val base = "${move.from}${move.to}"
+        return if (move.isPromotion) {
+            base + when (move.promotion) {
+                PieceType.QUEEN -> "q"
+                PieceType.ROOK -> "r"
+                PieceType.BISHOP -> "b"
+                PieceType.KNIGHT -> "n"
+                else -> ""
+            }
+        } else base
     }
 
     companion object {

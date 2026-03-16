@@ -132,17 +132,19 @@ class CarballoAdapter : EngineAdapterModule {
 
         return try {
             withContext(Dispatchers.Default) {
-                // Set up position from FEN. The orchestrator provides fen as the
-                // current position and moves as the game history — do NOT replay
-                // moves on top of the FEN (they've already been applied).
-                debugLog("getBestMove: fen=${params.fen} maxDepth=${params.maxDepth} timeMs=${params.timeMs}")
+                // Set up position. If moves are provided, fen is the starting
+                // position and moves are replayed to reach the search position
+                // (gives the engine game history for repetition detection).
+                // If no moves, fen is the position to search as-is.
+                debugLog("getBestMove: fen=${params.fen} moves=${params.moves?.size ?: 0} maxDepth=${params.maxDepth} timeMs=${params.timeMs}")
                 eng.board.setFen(params.fen)
-                debugLog("getBestMove: board FEN after setup: ${eng.board.fen}")
+                val moves = params.moves
+                if (!moves.isNullOrEmpty()) {
+                    eng.board.doMoves(moves.joinToString(" "))
+                    debugLog("getBestMove: position after moves: ${eng.board.fen}")
+                }
 
                 // Configure search parameters.
-                // When neither depth nor time is specified, use a default depth
-                // to prevent Carballo's time management from computing 0ms
-                // (it defaults wtime/btime to 0, resulting in no search).
                 val searchParams = SearchParameters()
                 val maxDepth = params.maxDepth
                 val timeMs = params.timeMs
