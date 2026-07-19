@@ -7,12 +7,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import scp.protocol.*
-import java.net.URI
-import java.net.http.HttpClient
-import java.net.http.HttpRequest
-import java.net.http.HttpResponse
+import java.util.concurrent.TimeUnit
 
 class RemoteStockfishAdapter(
     private val apiUrl: String = "https://chess-api.com/v1",
@@ -21,7 +22,13 @@ class RemoteStockfishAdapter(
     private val _errors = MutableSharedFlow<EngineErrorEvent>()
     override val errors: SharedFlow<EngineErrorEvent> = _errors
 
-    private val httpClient: HttpClient = HttpClient.newHttpClient()
+    // OkHttp instead of the JDK HttpClient so this module runs on Android as well as the JVM.
+    private val httpClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
+    private val jsonMediaType = "application/json".toMediaType()
 
     private var configured = false
     private var depth: Int = DEFAULT_DEPTH
@@ -143,19 +150,18 @@ class RemoteStockfishAdapter(
     }
 
     private suspend fun post(body: JSONObject): JSONObject = withContext(Dispatchers.IO) {
-        val request = HttpRequest.newBuilder()
-            .uri(URI.create(apiUrl))
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body.toString()))
+        val request = Request.Builder()
+            .url(apiUrl)
+            .post(body.toString().toRequestBody(jsonMediaType))
             .build()
 
-        val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
-
-        if (response.statusCode() !in 200..299) {
-            throw RuntimeException("HTTP ${response.statusCode()}: ${response.body()}")
+        httpClient.newCall(request).execute().use { response ->
+            val responseBody = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw RuntimeException("HTTP ${response.code}: $responseBody")
+            }
+            JSONObject(responseBody)
         }
-
-        JSONObject(response.body())
     }
 
     private fun parseScore(response: JSONObject): Score? {

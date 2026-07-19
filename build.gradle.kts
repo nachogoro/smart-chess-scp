@@ -12,10 +12,21 @@ subprojects {
         mavenLocal()
         mavenCentral()
         google()
+        maven { url = uri("https://jitpack.io") }
     }
 
     configure<org.jetbrains.kotlin.gradle.dsl.KotlinJvmProjectExtension> {
         jvmToolchain(21)
+        // Compile with the JDK 21 toolchain but emit Java 17 bytecode so these modules can be
+        // consumed by the Android app (its dexer/D8 accepts class-file 61, not 65).
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
+    tasks.withType<JavaCompile>().configureEach {
+        sourceCompatibility = "17"
+        targetCompatibility = "17"
     }
 
     dependencies {
