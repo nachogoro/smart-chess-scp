@@ -31,10 +31,23 @@ publishing.
 
 ## Building
 
+This repository builds on its own — the native rules library is reached through
+`io.github.nachogoro:simplechess`, resolved from Maven Central, so no sibling checkouts are needed:
+
 ```sh
+git clone git@github.com:nachogoro/simple-chess-scp.git
+cd simple-chess-scp
 ./gradlew build      # compile and test every module
 ./gradlew test       # tests only
 ```
 
-The native rules library is reached through `io.github.nachogoro:simplechess`, resolved from Maven
-Central.
+Its **consumers**, however, reference it by relative path (`../simple-chess-scp`) as a Gradle
+composite build, so when working on one of them this repo must sit beside it under the same parent
+directory:
+
+```
+<parent>/
+├── simple-chess-scp        # this repo
+├── simple-chess-desktop    # consumes it
+└── simple-chess-android    # consumes it (alongside simple-chess-kotlin)
+```
