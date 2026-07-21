@@ -1,3 +1,3 @@
 dependencies {
-    implementation(project(":protocol"))
+    implementation(project(":scp-core"))
 }
