@@ -1,6 +1,7 @@
 package scp.orchestrator
 
 import scp.protocol.*
+import kotlinx.coroutines.launch
 import scp.protocol.debugLog
 
 internal suspend fun Orchestrator.handleMoveReady() {
@@ -37,11 +38,21 @@ internal suspend fun Orchestrator.handleMoveReady() {
             return
         }
         is Result.Success -> {
-            // For remote games, send the move to the remote server
             if (s.mode == GameMode.REMOTE) {
-                s.remote?.sendMove(uci)
+                // Hand the turn over locally at once, then send the move to the server in the
+                // background, so the clock switches to the opponent immediately rather than waiting
+                // on the network round-trip. Lichess's own client stops your clock the moment you
+                // move; the authoritative time returns on the opponent's reply.
+                transitionToAwaitingMove()
+                scope.launch {
+                    val sent = s.remote?.sendMove(uci)
+                    if (sent is Result.Failure) {
+                        ui.displayError("Failed to send move to the server: ${sent.error.message}")
+                    }
+                }
+            } else {
+                transitionToAwaitingMove()
             }
-            transitionToAwaitingMove()
         }
     }
 }
