@@ -178,20 +178,33 @@ class IntegrationTest {
     }
 
     @Test
-    fun `resigning is reported as a resignation, by the player whose turn it is`() =
-        runTest(UnconfinedTestDispatcher()) {
-            val f = startGame()
-            f.playFromBoard("e2e4")
+    fun `the resigning player is the one the UI names`() = runTest(UnconfinedTestDispatcher()) {
+        val f = startGame()
+        f.playFromBoard("e2e4")
 
-            // Black is to move, so black is the one resigning.
-            f.ui.emitResignRequested(f.gameId)
+        // Black is to move, but white is the one resigning. Whose request it is belongs to the
+        // UI: a local game is two people at one board, and inferring it from the turn resigned
+        // the wrong player whenever the other one had asked.
+        f.ui.emitResignRequested(f.gameId, Color.WHITE)
 
-            val summary = assertNotNull(f.ui.lastGameSummary)
-            assertEquals(Termination.Resignation, summary.termination)
-            assertEquals(GameResult.WHITE_WINS, summary.result)
+        val summary = assertNotNull(f.ui.lastGameSummary)
+        assertEquals(Termination.Resignation, summary.termination)
+        assertEquals(GameResult.BLACK_WINS, summary.result)
 
-            f.orchestrator.stop()
-        }
+        f.orchestrator.stop()
+    }
+
+    @Test
+    fun `the player to move can resign too`() = runTest(UnconfinedTestDispatcher()) {
+        val f = startGame()
+        f.playFromBoard("e2e4")
+
+        f.ui.emitResignRequested(f.gameId, Color.BLACK)
+
+        assertEquals(GameResult.WHITE_WINS, assertNotNull(f.ui.lastGameSummary).result)
+
+        f.orchestrator.stop()
+    }
 
     @Test
     fun `an agreed draw is reported as agreement`() = runTest(UnconfinedTestDispatcher()) {

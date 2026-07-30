@@ -6,7 +6,7 @@ sealed class OrchestratorEvent {
     // UI events
     data object NewGameRequested : OrchestratorEvent()
     data class MoveReady(val gameId: String) : OrchestratorEvent()
-    data class ResignRequested(val gameId: String) : OrchestratorEvent()
+    data class ResignRequested(val gameId: String, val color: Color) : OrchestratorEvent()
     data class DrawRequested(val gameId: String) : OrchestratorEvent()
     data class AbortRequested(val gameId: String) : OrchestratorEvent()
 

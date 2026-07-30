@@ -52,7 +52,7 @@ class Orchestrator(
         // UI events
         launch { ui.newGameRequested.collect { eventChannel.send(OrchestratorEvent.NewGameRequested) } }
         launch { ui.moveReady.collect { eventChannel.send(OrchestratorEvent.MoveReady(it.gameId)) } }
-        launch { ui.resignRequested.collect { eventChannel.send(OrchestratorEvent.ResignRequested(it.gameId)) } }
+        launch { ui.resignRequested.collect { eventChannel.send(OrchestratorEvent.ResignRequested(it.gameId, it.color)) } }
         launch { ui.drawRequested.collect { eventChannel.send(OrchestratorEvent.DrawRequested(it.gameId)) } }
         launch { ui.abortRequested.collect { eventChannel.send(OrchestratorEvent.AbortRequested(it.gameId)) } }
 
@@ -135,7 +135,7 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.ResignRequested -> {
-                    handleResign()
+                    handleResign(event.color)
                     return
                 }
                 is OrchestratorEvent.AbortRequested -> {

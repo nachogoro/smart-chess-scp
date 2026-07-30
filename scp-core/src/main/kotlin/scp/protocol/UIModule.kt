@@ -102,7 +102,15 @@ sealed class UIError(override val code: String) : ModuleError {
 
 data class MoveReadyEvent(val gameId: String)
 
-data class ResignRequestedEvent(val gameId: String)
+/**
+ * A player wants to resign.
+ *
+ * [color] is whose resignation it is, and it is the UI's to decide because only the UI knows how
+ * the request was made. A local game is two people at one board: whether the Resign button belongs
+ * to the player to move, or there is one for each of them, is a question about the screen, and
+ * inferring the answer here got it wrong for whichever of them was not to move.
+ */
+data class ResignRequestedEvent(val gameId: String, val color: Color)
 
 data class DrawRequestedEvent(val gameId: String)
 

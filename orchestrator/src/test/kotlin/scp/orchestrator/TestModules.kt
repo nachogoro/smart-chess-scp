@@ -252,7 +252,8 @@ class FakeUIModule : UIModule {
 
     suspend fun emitNewGameRequested() = _newGameRequested.emit(Unit)
     suspend fun emitMoveReady(gameId: String) = _moveReady.emit(MoveReadyEvent(gameId))
-    suspend fun emitResignRequested(gameId: String) = _resignRequested.emit(ResignRequestedEvent(gameId))
+    suspend fun emitResignRequested(gameId: String, color: Color = Color.WHITE) =
+        _resignRequested.emit(ResignRequestedEvent(gameId, color))
     suspend fun emitDrawRequested(gameId: String) = _drawRequested.emit(DrawRequestedEvent(gameId))
     suspend fun emitAbortRequested(gameId: String) = _abortRequested.emit(AbortRequestedEvent(gameId))
 }

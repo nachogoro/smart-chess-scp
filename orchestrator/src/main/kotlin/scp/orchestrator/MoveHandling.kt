@@ -182,17 +182,19 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
     }
 }
 
-internal suspend fun Orchestrator.handleResign() {
+/**
+ * A player resigns.
+ *
+ * [color] comes from the UI, which is the only module that knows whose request it was: a local
+ * game is two people at one board, and whether Resign belongs to the player to move or to each of
+ * them separately is a question about the screen. Inferring it from whose turn it was resigned the
+ * wrong player whenever it was the other one who had asked.
+ */
+internal suspend fun Orchestrator.handleResign(color: Color) {
     val s = session ?: return
     when (s.mode) {
-        GameMode.LOCAL -> {
-            // In local mode, resign for the player whose turn it is
-            val turnColor = (state as? OrchestratorState.AwaitingPlayerMove)?.color ?: return
-            gameController.resign(s.gameId, turnColor)
-        }
-        GameMode.ENGINE -> {
-            val playerColor = s.playerColor ?: return
-            gameController.resign(s.gameId, playerColor)
+        GameMode.LOCAL, GameMode.ENGINE -> {
+            gameController.resign(s.gameId, color)
         }
         GameMode.REMOTE -> {
             // The server is the authority on how a remote game ends (PROTOCOL.md §6.3), so this
