@@ -163,6 +163,34 @@ class GameLifecycleTest {
     }
 
     @Test
+    fun `an action aimed at a finished game does not act on the current one`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // A UI can queue a tap that outlives the game it was made in: resign pressed as one
+            // game ends, delivered after the next has started. It used to end the new game.
+            val orchestrator = startLocalGame()
+            val first = orchestrator.session!!.gameId
+
+            gc.nextGameId = "game-2"
+            ui.emitNewGameRequested()
+            val second = orchestrator.session!!.gameId
+            assertNotEquals(first, second)
+
+            ui.emitResignRequested(first)
+            ui.emitAbortRequested(first)
+            ui.emitDrawRequested(first)
+            ui.emitMoveReady(first)
+
+            assertNull(gc.lastResign)
+            assertNull(gc.lastAbort)
+            assertNull(gc.lastDrawClaim)
+            assertNull(gc.lastSubmittedMove)
+            assertNotNull(orchestrator.session)
+            assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
+
+            orchestrator.stop()
+        }
+
+    @Test
     fun `a flag fall says who won on time`() = runTest(UnconfinedTestDispatcher()) {
         // The result used to be left at its default of "*", so a UI could say the game ended on
         // time and never who by. Whose clock ran out settles it.

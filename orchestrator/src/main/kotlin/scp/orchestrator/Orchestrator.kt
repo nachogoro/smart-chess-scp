@@ -84,6 +84,15 @@ class Orchestrator(
         moduleCollectorJobs = emptyList()
     }
 
+    /** The game a user action is about, for the events that name one. */
+    private fun OrchestratorEvent.targetGameId(): String? = when (this) {
+        is OrchestratorEvent.MoveReady -> gameId
+        is OrchestratorEvent.ResignRequested -> gameId
+        is OrchestratorEvent.DrawRequested -> gameId
+        is OrchestratorEvent.AbortRequested -> gameId
+        else -> null
+    }
+
     private suspend fun handleEvent(event: OrchestratorEvent) {
         // NewGameRequested is always handled — clean up any active state first
         if (event is OrchestratorEvent.NewGameRequested && state !is OrchestratorState.Idle) {
@@ -92,6 +101,15 @@ class Orchestrator(
             session = null
             state = OrchestratorState.Idle
             // Fall through to handleIdle which will call runSetup()
+        }
+
+        // An event naming a game it is no longer time for is dropped. A UI can queue an action
+        // that outlives the game it was made in - a resignation pressed as a game ends and
+        // delivered after the next one has started - and acting on it would end a game nobody
+        // asked to end. game.ended and game.flagFall make the same check for themselves, because
+        // they have somewhere to put the id they carry.
+        event.targetGameId()?.let { target ->
+            if (target != session?.gameId) return
         }
 
         // Global interrupts — checked first when a game is active
