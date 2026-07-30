@@ -7,25 +7,11 @@ import kotlinx.serialization.Serializable
  *
  * @property id Lichess user ID (lowercase).
  * @property username Display username.
- * @property perfs Performance ratings keyed by speed/variant (e.g. "rapid", "classical").
  */
 @Serializable
 data class LichessAccount(
     val id: String,
     val username: String,
-    val perfs: Map<String, LichessPerf> = emptyMap(),
-)
-
-/**
- * Rating information for a single speed/variant.
- *
- * @property games Number of games played in this category.
- * @property rating Current rating.
- */
-@Serializable
-data class LichessPerf(
-    val games: Int = 0,
-    val rating: Int = 0,
 )
 
 // -- Event stream models --
@@ -77,7 +63,6 @@ data class LichessGameEventInfo(
 data class LichessOpponent(
     val id: String? = null,
     val username: String = "Anonymous",
-    val rating: Int? = null,
 )
 
 // -- Game stream models --
@@ -124,7 +109,6 @@ data class LichessVariant(
 data class LichessPlayer(
     val id: String? = null,
     val name: String = "Anonymous",
-    val rating: Int? = null,
 )
 
 /**

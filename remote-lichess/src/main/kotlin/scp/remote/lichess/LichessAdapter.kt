@@ -73,7 +73,7 @@ class LichessAdapter(
 ) : RemoteAdapterModule {
 
     private var token: String? = null
-    private var user: RemoteUser? = null
+    private var username: String? = null
     private var currentGameId: String? = null
     private var myColor: Color? = null
 
@@ -223,12 +223,11 @@ class LichessAdapter(
         }
 
         token = apiToken
-        val rating = account.perfs.values.maxByOrNull { it.games }?.rating
-        user = RemoteUser(username = account.username, rating = rating)
+        username = account.username
 
         startEventStream()
 
-        return Result.Success(ConfigureResult(user))
+        return Result.Success(ConfigureResult(username))
     }
 
     /**
@@ -401,7 +400,7 @@ class LichessAdapter(
         announcedGameId = null
         myColor = null
         token = null
-        user = null
+        username = null
         return Result.Success(Unit)
     }
 
@@ -559,7 +558,7 @@ class LichessAdapter(
      * [LichessGameFull.state] in case the game already has moves (e.g. on reconnection).
      */
     private suspend fun handleGameFull(game: LichessGameFull) {
-        val username = user?.username ?: return
+        val username = this.username ?: return
         debugLog("handleGameFull: white=${game.white.name}(id=${game.white.id}) black=${game.black.name}(id=${game.black.id}) me=$username")
 
         myColor = when {

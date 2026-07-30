@@ -44,9 +44,13 @@ data class RemoteCapabilities(
     val seekParameters: List<ParameterDescriptor>,
 )
 
-data class ConfigureResult(val user: RemoteUser?)
-
-data class RemoteUser(val username: String, val rating: Int?)
+/**
+ * [username] is who the platform says we signed in as, or null where it does not say.
+ *
+ * A name and nothing else, for the same reason an opponent is one: a rating is a platform's own
+ * idea, not every platform keeps one, and nothing in a game depends on it.
+ */
+data class ConfigureResult(val username: String?)
 
 data class GameStartedEvent(
     val gameId: String,

@@ -6,11 +6,7 @@ import kotlinx.coroutines.flow.consumeAsFlow
 
 class FakeLichessApi : LichessApi {
 
-    var account: LichessAccount = LichessAccount(
-        id = "testuser",
-        username = "TestUser",
-        perfs = mapOf("rapid" to LichessPerf(games = 10, rating = 1500)),
-    )
+    var account: LichessAccount = LichessAccount(id = "testuser", username = "TestUser")
     var authShouldFail = false
 
     /** When set, [makeMove] throws this instead of recording the move. */

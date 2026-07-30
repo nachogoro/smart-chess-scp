@@ -324,7 +324,7 @@ class FakeRemoteModule : RemoteAdapterModule {
     )
     var capabilitiesFail: RemoteError? = null
     var configureFail: RemoteError? = null
-    var configureResponse = ConfigureResult(user = RemoteUser("testuser", 1500))
+    var configureResponse = ConfigureResult(username = "testuser")
     var seekFail: RemoteError? = null
     var lastConfigureSettings: Map<String, Any>? = null
     var lastSeekSettings: Map<String, Any>? = null

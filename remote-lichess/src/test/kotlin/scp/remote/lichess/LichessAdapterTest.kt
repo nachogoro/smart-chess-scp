@@ -33,8 +33,8 @@ class LichessAdapterTest {
     ): String = json.encodeToString(
         LichessGameFull(
             id = id,
-            white = LichessPlayer(id = whiteId, name = whiteName, rating = 1500),
-            black = LichessPlayer(id = blackId, name = blackName, rating = 1400),
+            white = LichessPlayer(id = whiteId, name = whiteName),
+            black = LichessPlayer(id = blackId, name = blackName),
             initialFen = initialFen,
             state = LichessGameState(
                 moves = moves,
@@ -155,8 +155,7 @@ class LichessAdapterTest {
 
         val result = adapter.configure(mapOf("api_token" to "valid-token"))
         assertIs<Result.Success<ConfigureResult>>(result)
-        assertEquals("TestUser", result.value.user?.username)
-        assertEquals(1500, result.value.user?.rating)
+        assertEquals("TestUser", result.value.username)
 
         adapter.disconnect()
     }

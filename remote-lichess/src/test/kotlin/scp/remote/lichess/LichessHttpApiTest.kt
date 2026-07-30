@@ -36,13 +36,14 @@ class LichessHttpApiTest {
     fun `getAccount sends GET with auth header and parses response`() = runTest {
         server.enqueue(MockResponse()
             .addHeader("Content-Type", "application/json")
+            // Lichess still sends perfs; the model no longer asks for them, and
+            // ignoreUnknownKeys means the extra field is simply not read.
             .setBody("""{"id":"testuser","username":"TestUser","perfs":{"rapid":{"games":42,"rating":1500}}}"""))
 
         val account = api.getAccount("my-token")
 
         assertEquals("testuser", account.id)
         assertEquals("TestUser", account.username)
-        assertEquals(1500, account.perfs["rapid"]?.rating)
 
         val request = server.takeRequest()
         assertEquals("GET", request.method)
