@@ -392,7 +392,7 @@ class GameControllerTest {
             Termination.Resignation to GameStatus.RESIGNED,
             Termination.Timeout to GameStatus.TIMEOUT,
             Termination.Aborted to GameStatus.ABORTED,
-            Termination.Drawn(DrawKind.Agreement) to GameStatus.DRAW,
+            Termination.Agreement to GameStatus.DRAW,
         )
 
         for ((termination, expected) in cases) {

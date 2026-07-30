@@ -214,7 +214,7 @@ class IntegrationTest {
         f.ui.emitDrawRequested(f.gameId)
 
         val summary = assertNotNull(f.ui.lastGameSummary)
-        assertEquals(Termination.Drawn(DrawKind.Agreement), summary.termination)
+        assertEquals(Termination.Agreement, summary.termination)
         assertEquals(GameResult.DRAW, summary.result)
 
         f.orchestrator.stop()

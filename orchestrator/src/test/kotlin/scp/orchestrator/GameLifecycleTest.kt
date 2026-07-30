@@ -230,10 +230,10 @@ class GameLifecycleTest {
 
             // ...and when it arrives, it is what the UI is told.
             gc.emitGameEnded(
-                GameEndedEvent(gameId, GameResult.DRAW, Termination.Drawn(DrawKind.InsufficientMaterial), "")
+                GameEndedEvent(gameId, GameResult.DRAW, Termination.InsufficientMaterial, "")
             )
             assertEquals(
-                Termination.Drawn(DrawKind.InsufficientMaterial),
+                Termination.InsufficientMaterial,
                 ui.lastGameSummary?.termination,
             )
 
@@ -417,7 +417,7 @@ class GameLifecycleTest {
         ui.emitNewGameRequested()
         val gameId1 = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId1, result = GameResult.DRAW, termination = Termination.Drawn(DrawKind.Other()), fen = ""))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId1, result = GameResult.DRAW, termination = Termination.Other(), fen = ""))
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         // Second game

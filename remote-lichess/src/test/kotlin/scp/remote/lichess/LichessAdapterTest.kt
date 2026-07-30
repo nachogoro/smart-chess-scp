@@ -611,9 +611,11 @@ class LichessAdapterTest {
             "outoftime" to Termination.Timeout,
             "aborted" to Termination.Aborted,
             "noStart" to Termination.Aborted,
-            "draw" to Termination.Drawn(DrawKind.Other(authorityCode = "draw")),
-            "cheat" to Termination.Other(authorityCode = "cheat", text = "fair play violation"),
-            "variantEnd" to Termination.Other(authorityCode = "variantEnd", text = "variant end"),
+            "draw" to Termination.Other(authorityCode = "draw"),
+            // No text on either: "fair play violation" and "variant end" were this module's
+            // wording, not Lichess's, and `text` is for the words the platform itself supplied.
+            "cheat" to Termination.Other(authorityCode = "cheat"),
+            "variantEnd" to Termination.Other(authorityCode = "variantEnd"),
             "somethingLichessAddsLater" to Termination.Other(authorityCode = "somethingLichessAddsLater"),
         )
 

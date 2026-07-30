@@ -268,7 +268,7 @@ class GameController(
             game.status = GameStatus.DRAW
             game.result = GameResult.DRAW
             game.drawOffer = null
-            pending += endedEvent(game, Termination.Drawn(DrawKind.Agreement))
+            pending += endedEvent(game, Termination.Agreement)
         } else {
             game.drawOffer = null
             game.status = GameStatus.IN_PROGRESS
@@ -309,7 +309,7 @@ class GameController(
         game.status = GameStatus.DRAW
         game.result = GameResult.DRAW
 
-        pending += endedEvent(game, Termination.Drawn(drawKindOf(claimReason)))
+        pending += endedEvent(game, terminationForDraw(claimReason))
 
         return Result.Success(Unit)
     }
@@ -438,20 +438,28 @@ class GameController(
         GameStatus.CHECKMATE -> Termination.Checkmate
         GameStatus.STALEMATE -> Termination.Stalemate
         // The status says the game was drawn; only the rules engine knows under which rule.
-        GameStatus.DRAW -> Termination.Drawn(drawKindOf(chessGame.drawReason))
+        GameStatus.DRAW -> terminationForDraw(chessGame.drawReason)
         else -> Termination.Other()
     }
 
-    private fun drawKindOf(reason: DrawReason?): DrawKind = when (reason) {
-        DrawReason.OFFERED_AND_ACCEPTED -> DrawKind.Agreement
+    /**
+     * The rule the library drew a game under, as a cause.
+     *
+     * Siblings of checkmate and resignation rather than variants of a `DRAWN` umbrella: each of
+     * these is a reason a game stopped, and that the game was drawn is already in its result.
+     */
+    private fun terminationForDraw(reason: DrawReason?): Termination = when (reason) {
+        DrawReason.STALEMATE -> Termination.Stalemate
+        DrawReason.OFFERED_AND_ACCEPTED -> Termination.Agreement
         DrawReason.INSUFFICIENT_MATERIAL,
-        DrawReason.OPPONENT_INSUFFICIENT_MATERIAL -> DrawKind.InsufficientMaterial
-        DrawReason.FIFTY_MOVE_RULE -> DrawKind.FiftyMoveRule
-        DrawReason.SEVENTY_FIVE_MOVE_RULE -> DrawKind.SeventyFiveMoveRule
-        DrawReason.THREE_FOLD_REPETITION -> DrawKind.ThreefoldRepetition
-        DrawReason.FIVE_FOLD_REPETITION -> DrawKind.FivefoldRepetition
-        // A rule the library knows and this vocabulary does not: still a draw, kind unnamed.
-        else -> DrawKind.Other()
+        DrawReason.OPPONENT_INSUFFICIENT_MATERIAL -> Termination.InsufficientMaterial
+        DrawReason.FIFTY_MOVE_RULE -> Termination.FiftyMoveRule
+        DrawReason.SEVENTY_FIVE_MOVE_RULE -> Termination.SeventyFiveMoveRule
+        DrawReason.THREE_FOLD_REPETITION -> Termination.ThreefoldRepetition
+        DrawReason.FIVE_FOLD_REPETITION -> Termination.FivefoldRepetition
+        // A rule the library knows and this vocabulary does not. The result still says it was
+        // drawn, so only the reason is lost.
+        else -> Termination.Other()
     }
 
     /**
@@ -468,7 +476,12 @@ class GameController(
             Termination.Resignation -> GameStatus.RESIGNED
             Termination.Timeout -> GameStatus.TIMEOUT
             Termination.Aborted -> GameStatus.ABORTED
-            is Termination.Drawn -> GameStatus.DRAW
+            Termination.Agreement,
+            Termination.InsufficientMaterial,
+            Termination.FiftyMoveRule,
+            Termination.SeventyFiveMoveRule,
+            Termination.ThreefoldRepetition,
+            Termination.FivefoldRepetition -> GameStatus.DRAW
             is Termination.Other -> when (result) {
                 GameResult.WHITE_WINS, GameResult.BLACK_WINS -> GameStatus.RESIGNED
                 GameResult.DRAW, GameResult.IN_PROGRESS -> GameStatus.DRAW
@@ -516,16 +529,17 @@ class GameController(
             || claimReason == DrawReason.OPPONENT_INSUFFICIENT_MATERIAL
 
         game.status = GameStatus.TIMEOUT
-        return if (opponentCannotMate) {
-            game.result = GameResult.DRAW
-            endedEvent(game, Termination.Drawn(DrawKind.InsufficientMaterial))
+        // The cause is the clock either way. Whether that cost the player the game or only drew
+        // it is the result's to say, which is why nothing here has to choose between the two.
+        game.result = if (opponentCannotMate) {
+            GameResult.DRAW
         } else {
-            game.result = when (color) {
+            when (color) {
                 Color.WHITE -> GameResult.BLACK_WINS
                 Color.BLACK -> GameResult.WHITE_WINS
             }
-            endedEvent(game, Termination.Timeout)
         }
+        return endedEvent(game, Termination.Timeout)
     }
 
     private fun startFlagFallTimer(game: InternalGame) {

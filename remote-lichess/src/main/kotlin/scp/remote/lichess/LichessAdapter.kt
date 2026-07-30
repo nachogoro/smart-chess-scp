@@ -768,8 +768,12 @@ internal fun mapLichessTermination(status: String): Termination = when (status) 
     "stalemate" -> Termination.Stalemate
     "timeout", "outoftime" -> Termination.Timeout
     "aborted", "noStart" -> Termination.Aborted
-    "draw" -> Termination.Drawn(DrawKind.Other(authorityCode = status))
-    "cheat" -> Termination.Other(authorityCode = status, text = "fair play violation")
-    "variantEnd" -> Termination.Other(authorityCode = status, text = "variant end")
+    // Lichess reports every drawn game as "draw" without saying under which rule, so the
+    // cause is genuinely unknown. That it was a draw is in the result, not here.
+    "draw" -> Termination.Other(authorityCode = status)
+    // No text: "fair play violation" would be this module's wording, not Lichess's, and
+    // `text` is for the words the platform itself supplied (§2.6).
+    "cheat" -> Termination.Other(authorityCode = status)
+    "variantEnd" -> Termination.Other(authorityCode = status)
     else -> Termination.Other(authorityCode = status)
 }
