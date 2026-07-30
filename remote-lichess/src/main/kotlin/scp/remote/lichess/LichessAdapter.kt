@@ -200,14 +200,8 @@ class LichessAdapter(
 
         val account = try {
             api.getAccount(apiToken)
-        } catch (e: LichessApiException) {
-            return if (e.statusCode == 401) {
-                Result.Failure(RemoteError.AuthFailed())
-            } else {
-                Result.Failure(RemoteError.PlatformError(e.statusCode, e.message))
-            }
         } catch (e: Exception) {
-            return Result.Failure(RemoteError.Unreachable(e.message))
+            return Result.Failure(e.toRemoteError())
         }
 
         token = apiToken
@@ -259,7 +253,7 @@ class LichessAdapter(
                 try {
                     api.challengeAi(t, level, time, increment, color)
                 } catch (e: Exception) {
-                    return Result.Failure(RemoteError.Unreachable(e.message))
+                    return Result.Failure(e.toRemoteError())
                 }
             }
             else -> {
@@ -315,14 +309,8 @@ class LichessAdapter(
             api.makeMove(t, gameId, move)
             debugLog("sendMove OK, lastKnownMoveCount=$lastKnownMoveCount")
             Result.Success(Unit)
-        } catch (e: LichessApiException) {
-            if (e.statusCode == 400) {
-                Result.Failure(RemoteError.PlatformError(e.statusCode, e.message))
-            } else {
-                Result.Failure(RemoteError.Unreachable(e.message))
-            }
         } catch (e: Exception) {
-            Result.Failure(RemoteError.Unreachable(e.message))
+            Result.Failure(e.toRemoteError())
         }
     }
 
@@ -335,7 +323,7 @@ class LichessAdapter(
             api.resign(t, gameId)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.Unreachable(e.message))
+            Result.Failure(e.toRemoteError())
         }
     }
 
@@ -348,7 +336,7 @@ class LichessAdapter(
             api.offerDraw(t, gameId)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.Unreachable(e.message))
+            Result.Failure(e.toRemoteError())
         }
     }
 
@@ -365,7 +353,7 @@ class LichessAdapter(
             api.respondDraw(t, gameId, accept)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.Unreachable(e.message))
+            Result.Failure(e.toRemoteError())
         }
     }
 
@@ -666,6 +654,23 @@ class LichessAdapter(
  * `draw` covers every rule Lichess draws a game under and it does not say which, so the kind
  * is unnamed rather than guessed at.
  */
+/**
+ * The failure this exception represents, as the protocol names it.
+ *
+ * The distinction the protocol draws is the player's, not the transport's (PROTOCOL.md 7.2): a
+ * platform that answered and refused is worth a different sentence, and a different decision about
+ * retrying, from one that could not be reached. Mapping everything but one status onto UNREACHABLE
+ * threw that away and told a player whose token had expired that their network was down.
+ */
+internal fun Exception.toRemoteError(): RemoteError {
+    if (this !is LichessApiException) return RemoteError.Unreachable(message)
+    return when (statusCode) {
+        401, 403 -> RemoteError.AuthFailed()
+        404 -> RemoteError.NoActiveGame()
+        else -> RemoteError.PlatformError(statusCode, serverText())
+    }
+}
+
 private fun Color.opposite(): Color = when (this) {
     Color.WHITE -> Color.BLACK
     Color.BLACK -> Color.WHITE

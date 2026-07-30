@@ -12,6 +12,9 @@ class FakeLichessApi : LichessApi {
         perfs = mapOf("rapid" to LichessPerf(games = 10, rating = 1500)),
     )
     var authShouldFail = false
+
+    /** When set, [makeMove] throws this instead of recording the move. */
+    var failMoveWith: Exception? = null
     var lastSeekParams: SeekParams? = null
     var lastMoveSent: Pair<String, String>? = null // gameId to move
     var lastResignedGame: String? = null
@@ -73,6 +76,7 @@ class FakeLichessApi : LichessApi {
     }
 
     override suspend fun makeMove(token: String, gameId: String, move: String) {
+        failMoveWith?.let { throw it }
         lastMoveSent = gameId to move
     }
 

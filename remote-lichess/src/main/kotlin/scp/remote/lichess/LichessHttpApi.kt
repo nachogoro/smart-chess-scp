@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -212,8 +214,9 @@ class LichessHttpApi(
             val response = call.execute()
             if (!response.isSuccessful) {
                 val code = response.code
+                val body = response.body?.string().orEmpty()
                 response.close()
-                throw LichessApiException(code, "Stream error: $code")
+                throw LichessApiException(code, body)
             }
             response.body?.source()?.use { source ->
                 while (true) {
@@ -232,5 +235,29 @@ class LichessHttpApi(
     }.flowOn(Dispatchers.IO)
 }
 
-/** Exception thrown when the Lichess API returns a non-2xx response. */
-class LichessApiException(val statusCode: Int, message: String) : Exception(message)
+/**
+ * Thrown when the Lichess API returns a non-2xx response.
+ *
+ * [body] is the response body exactly as the platform sent it, and nothing else: the adapter
+ * hands it on as the platform's own words, which §2.6 lets a UI show as they stand. Anything
+ * composed here would be this module's words wearing Lichess's name.
+ */
+class LichessApiException(val statusCode: Int, val body: String) : Exception(
+    "HTTP $statusCode from Lichess: $body",
+) {
+
+    /**
+     * What the platform said, where it said anything worth showing.
+     *
+     * Lichess reports failures as `{"error": "..."}`; that string is the part meant for a person,
+     * and the JSON around it is not. Null when there is nothing usable, so a UI is not handed a
+     * fragment of a wire format to display.
+     */
+    fun serverText(): String? {
+        if (body.isBlank()) return null
+        val message = runCatching {
+            lichessJson.decodeFromString<JsonObject>(body)["error"]?.jsonPrimitive?.content
+        }.getOrNull()
+        return (message ?: body).takeIf { it.isNotBlank() }
+    }
+}

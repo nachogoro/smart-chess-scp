@@ -670,6 +670,78 @@ class LichessAdapterTest {
         adapter.disconnect()
     }
 
+    // -- Classifying what the platform said --
+
+    @Test
+    fun `a refusal from the platform is not reported as being unreachable`() = runTest {
+        // The distinction is the player's, not the transport's: one of the two is worth
+        // retrying, and only one of them is something they can do anything about.
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        api.failMoveWith = LichessApiException(400, """{"error":"Not your turn"}""")
+        val result = adapter.sendMove("e2e4")
+
+        val error = assertIs<RemoteError.PlatformError>(assertIs<Result.Failure<RemoteError>>(result).error)
+        assertEquals(400, error.statusCode)
+        // Lichess's own words, unwrapped from the JSON they arrived in - the one thing 2.6 lets
+        // a UI show as it stands.
+        assertEquals("Not your turn", error.serverText)
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `an expired token mid-game is an auth failure, not a network one`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        api.failMoveWith = LichessApiException(401, "")
+        assertIs<RemoteError.AuthFailed>(
+            assertIs<Result.Failure<RemoteError>>(adapter.sendMove("e2e4")).error
+        )
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `a platform that cannot be reached at all is UNREACHABLE`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        api.failMoveWith = java.io.IOException("connection reset")
+        assertIs<RemoteError.Unreachable>(
+            assertIs<Result.Failure<RemoteError>>(adapter.sendMove("e2e4")).error
+        )
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `server text is never something this module wrote`() {
+        // A body Lichess did not phrase for a person is not passed off as its wording.
+        assertNull(LichessApiException(503, "").serverText())
+        assertEquals("Not your turn", LichessApiException(400, """{"error":"Not your turn"}""").serverText())
+    }
+
     // -- Event flows do not replay --
 
     @Test
