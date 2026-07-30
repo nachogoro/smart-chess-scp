@@ -23,15 +23,17 @@ internal suspend fun Orchestrator.runSetup() {
 }
 
 internal suspend fun Orchestrator.setupLocal() {
-    var errorMessage: String? = null
+    var errorMessage: UIMessage? = null
 
     while (true) {
         val config = ui.configureLocalGame(errorMessage).getOrNull() ?: return
 
-        val boardCaps = board.getCapabilities().getOrNull()
-        if (boardCaps == null) {
-            errorMessage = "Failed to read board capabilities"
-            continue
+        val boardCaps = when (val caps = board.getCapabilities()) {
+            is Result.Failure -> {
+                errorMessage = UIMessage.BoardCapabilitiesUnavailable(caps.error)
+                continue
+            }
+            is Result.Success -> caps.value
         }
 
         val createResult = gameController.create(CreateGameParams(
@@ -40,7 +42,7 @@ internal suspend fun Orchestrator.setupLocal() {
             blackName = config.blackName,
         ))
         if (createResult is Result.Failure) {
-            errorMessage = "Failed to create game: ${createResult.error.message}"
+            errorMessage = UIMessage.GameCreationFailed(createResult.error)
             continue
         }
         val gameId = (createResult as Result.Success).value.gameId
@@ -79,29 +81,32 @@ internal suspend fun Orchestrator.setupEngine() {
         engineName = caps.name,
         parameters = caps.parameters,
     )
-    var errorMessage: String? = null
+    var errorMessage: UIMessage? = null
 
     while (true) {
         val config = ui.configureEngineGame(
             baseParams.copy(errorMessage = errorMessage)
         ).getOrNull() ?: return
 
-        if (eng.configure(config.engineSettings) is Result.Failure) {
-            errorMessage = "Failed to configure engine"
+        val configured = eng.configure(config.engineSettings)
+        if (configured is Result.Failure) {
+            errorMessage = UIMessage.EngineConfigurationFailed(configured.error)
             continue
         }
 
-        val boardCaps = board.getCapabilities().getOrNull()
-        if (boardCaps == null) {
-            errorMessage = "Failed to read board capabilities"
-            continue
+        val boardCaps = when (val caps = board.getCapabilities()) {
+            is Result.Failure -> {
+                errorMessage = UIMessage.BoardCapabilitiesUnavailable(caps.error)
+                continue
+            }
+            is Result.Success -> caps.value
         }
 
         val createResult = gameController.create(CreateGameParams(
             timeControl = config.timeControl,
         ))
         if (createResult is Result.Failure) {
-            errorMessage = "Failed to create game: ${createResult.error.message}"
+            errorMessage = UIMessage.GameCreationFailed(createResult.error)
             continue
         }
         val gameId = (createResult as Result.Success).value.gameId
@@ -144,26 +149,30 @@ internal suspend fun Orchestrator.setupRemote() {
         parameters = caps.parameters,
         seekParameters = caps.seekParameters,
     )
-    var errorMessage: String? = null
+    var errorMessage: UIMessage? = null
 
     while (true) {
         val config = ui.configureRemoteGame(
             baseParams.copy(errorMessage = errorMessage)
         ).getOrNull() ?: return
 
-        if (rem.configure(config.platformSettings) is Result.Failure) {
-            errorMessage = "Failed to configure remote platform"
+        val configured = rem.configure(config.platformSettings)
+        if (configured is Result.Failure) {
+            errorMessage = UIMessage.RemoteConfigurationFailed(configured.error)
             continue
         }
 
-        val boardCaps = board.getCapabilities().getOrNull()
-        if (boardCaps == null) {
-            errorMessage = "Failed to read board capabilities"
-            continue
+        val boardCaps = when (val caps = board.getCapabilities()) {
+            is Result.Failure -> {
+                errorMessage = UIMessage.BoardCapabilitiesUnavailable(caps.error)
+                continue
+            }
+            is Result.Success -> caps.value
         }
 
-        if (rem.seekGame(config.seekSettings) is Result.Failure) {
-            errorMessage = "Failed to seek game"
+        val sought = rem.seekGame(config.seekSettings)
+        if (sought is Result.Failure) {
+            errorMessage = UIMessage.SeekFailed(sought.error)
             continue
         }
 

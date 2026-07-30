@@ -40,6 +40,11 @@ sealed interface UIMessage {
         override val code = "BOARD_FAILED"
     }
 
+    /** The board could not say what it is capable of, so a game cannot be set up on it. */
+    data class BoardCapabilitiesUnavailable(val error: ModuleError) : UIMessage {
+        override val code = "BOARD_CAPABILITIES_UNAVAILABLE"
+    }
+
     // -- Moves --
 
     /** The game controller refused the move read off the board. */
@@ -78,6 +83,26 @@ sealed interface UIMessage {
 
     data object RemoteCapabilitiesUnavailable : UIMessage {
         override val code = "REMOTE_CAPABILITIES_UNAVAILABLE"
+    }
+
+    /** The engine would not accept the settings it was given. */
+    data class EngineConfigurationFailed(val error: ModuleError) : UIMessage {
+        override val code = "ENGINE_CONFIGURATION_FAILED"
+    }
+
+    /**
+     * The platform would not accept the settings it was given.
+     *
+     * Carries the error because the difference matters to the player: a rejected token is
+     * something they can fix, and a platform that is down is not.
+     */
+    data class RemoteConfigurationFailed(val error: ModuleError) : UIMessage {
+        override val code = "REMOTE_CONFIGURATION_FAILED"
+    }
+
+    /** The platform would not start looking for an opponent. */
+    data class SeekFailed(val error: ModuleError) : UIMessage {
+        override val code = "SEEK_FAILED"
     }
 
     data object DrawNotSupportedByEngine : UIMessage {

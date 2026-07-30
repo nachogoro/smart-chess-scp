@@ -177,8 +177,8 @@ internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
             // offer to discover. Leaving it pending would mean the next Draw tap agreed the draw
             // with no confirmation - including a second tap from the player who offered it.
             val offeredBy = when (turnColor) {
-                Color.WHITE -> s.whiteName ?: "White"
-                Color.BLACK -> s.blackName ?: "Black"
+                Color.WHITE -> DrawOffer(s.whiteName, Color.WHITE)
+                Color.BLACK -> DrawOffer(s.blackName, Color.BLACK)
             }
             val accepted = ui.promptDrawResponse(s.gameId, offeredBy).getOrNull() ?: false
             gameController.respondDraw(s.gameId, accepted)
@@ -196,7 +196,7 @@ internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
 
 internal suspend fun Orchestrator.handleRemoteDrawOffer() {
     val s = session ?: return
-    val accept = ui.promptDrawResponse(s.gameId, "opponent").getOrNull() ?: return
+    val accept = ui.promptDrawResponse(s.gameId, DrawOffer()).getOrNull() ?: return
     s.remote?.respondDraw(accept)
     if (accept) {
         gameController.respondDraw(s.gameId, true)

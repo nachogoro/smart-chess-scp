@@ -450,9 +450,14 @@ class MoveHandlingTest {
 
             ui.emitDrawRequested(gameId)
 
-            // White is to move at the start, so the dialog names White as the offering player and
-            // asks the person sitting on the other side of the board.
-            assertEquals(gameId to "White", ui.lastDrawResponsePrompt)
+            // White is to move at the start, so the offer is attributed to White and the person
+            // on the other side of the board is asked. The name is the one this game was set up
+            // with and is passed through untouched; the colour is there for a game that has none,
+            // where wording the offer is the UI's job rather than this module's.
+            assertEquals(
+                gameId to DrawOffer(name = "White", color = Color.WHITE),
+                ui.lastDrawResponsePrompt,
+            )
             assertEquals(gameId to true, controller.lastDrawResponse)
 
             orchestrator.stop()

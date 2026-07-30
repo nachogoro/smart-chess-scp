@@ -178,12 +178,12 @@ class FakeUIModule : UIModule {
     var lastDesync: Pair<String, UIMessage>? = null
     var displayErrorCount = 0
 
-    var lastConfigureLocalError: String? = null
+    var lastConfigureLocalError: UIMessage? = null
     var lastConfigureEngineParams: ConfigureEngineGameParams? = null
     var lastConfigureRemoteParams: ConfigureRemoteGameParams? = null
 
     override suspend fun selectGameMode(availableModes: List<GameMode>) = selectGameModeResponse
-    override suspend fun configureLocalGame(errorMessage: String?): Result<UIError, LocalGameConfig> {
+    override suspend fun configureLocalGame(errorMessage: UIMessage?): Result<UIError, LocalGameConfig> {
         lastConfigureLocalError = errorMessage
         return configureLocalGameResponses?.removeFirstOrNull() ?: configureLocalGameResponse
     }
@@ -201,9 +201,9 @@ class FakeUIModule : UIModule {
     override suspend fun promptPromotion(move: String, color: Color) = promptPromotionResponse
     override suspend fun promptMoveDisambiguation(moves: List<String>, color: Color) = promptDisambiguationResponse
 
-    var lastDrawResponsePrompt: Pair<String, String>? = null
+    var lastDrawResponsePrompt: Pair<String, DrawOffer>? = null
 
-    override suspend fun promptDrawResponse(gameId: String, from: String): Result<UIError, Boolean> {
+    override suspend fun promptDrawResponse(gameId: String, from: DrawOffer): Result<UIError, Boolean> {
         lastDrawResponsePrompt = gameId to from
         return promptDrawResponseResult
     }

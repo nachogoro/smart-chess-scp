@@ -106,7 +106,7 @@ class SetupFlowsTest {
         ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastConfigureLocalError)
+        assertEquals("DISCONNECTED", assertIs<UIMessage.BoardCapabilitiesUnavailable>(ui.lastConfigureLocalError).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -125,7 +125,7 @@ class SetupFlowsTest {
         ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to create game: Creation failed", ui.lastConfigureLocalError)
+        assertEquals("GAME_NOT_FOUND", assertIs<UIMessage.GameCreationFailed>(ui.lastConfigureLocalError).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -207,7 +207,7 @@ class SetupFlowsTest {
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastConfigureEngineParams?.errorMessage)
+        assertEquals("DISCONNECTED", assertIs<UIMessage.BoardCapabilitiesUnavailable>(ui.lastConfigureEngineParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -226,7 +226,7 @@ class SetupFlowsTest {
         gc.createFail = GameError.GameNotFound("Creation failed")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to create game: Creation failed", ui.lastConfigureEngineParams?.errorMessage)
+        assertEquals("GAME_NOT_FOUND", assertIs<UIMessage.GameCreationFailed>(ui.lastConfigureEngineParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -261,7 +261,7 @@ class SetupFlowsTest {
         engine.configureFail = EngineError.NotConfigured("Bad settings")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to configure engine", ui.lastConfigureEngineParams?.errorMessage)
+        assertEquals("NOT_CONFIGURED", assertIs<UIMessage.EngineConfigurationFailed>(ui.lastConfigureEngineParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -363,7 +363,7 @@ class SetupFlowsTest {
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read board capabilities", ui.lastConfigureRemoteParams?.errorMessage)
+        assertEquals("DISCONNECTED", assertIs<UIMessage.BoardCapabilitiesUnavailable>(ui.lastConfigureRemoteParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -398,7 +398,7 @@ class SetupFlowsTest {
         remote.configureFail = RemoteError.AuthFailed()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to configure remote platform", ui.lastConfigureRemoteParams?.errorMessage)
+        assertEquals("AUTH_FAILED", assertIs<UIMessage.RemoteConfigurationFailed>(ui.lastConfigureRemoteParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -417,7 +417,7 @@ class SetupFlowsTest {
         remote.seekFail = RemoteError.InvalidParams("Bad seek params")
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to seek game", ui.lastConfigureRemoteParams?.errorMessage)
+        assertEquals("INVALID_PARAMS", assertIs<UIMessage.SeekFailed>(ui.lastConfigureRemoteParams?.errorMessage).error.code)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()

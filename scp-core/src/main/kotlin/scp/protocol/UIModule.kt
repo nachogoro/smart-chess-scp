@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.SharedFlow
 interface UIModule {
     // Game setup
     suspend fun selectGameMode(availableModes: List<GameMode>): Result<UIError, GameMode>
-    suspend fun configureLocalGame(errorMessage: String? = null): Result<UIError, LocalGameConfig>
+    suspend fun configureLocalGame(errorMessage: UIMessage? = null): Result<UIError, LocalGameConfig>
     suspend fun selectEngine(engines: List<EngineInfo>): Result<UIError, String>
     suspend fun configureEngineGame(params: ConfigureEngineGameParams): Result<UIError, EngineGameConfig>
     suspend fun selectRemotePlatform(platforms: List<PlatformInfo>): Result<UIError, String>
@@ -14,7 +14,7 @@ interface UIModule {
     // In-game prompts
     suspend fun promptPromotion(move: String, color: Color): Result<UIError, PromotionPiece>
     suspend fun promptMoveDisambiguation(moves: List<String>, color: Color): Result<UIError, String>
-    suspend fun promptDrawResponse(gameId: String, from: String): Result<UIError, Boolean>
+    suspend fun promptDrawResponse(gameId: String, from: DrawOffer): Result<UIError, Boolean>
 
     // Notifications (one-way, no response expected)
     suspend fun onSeekingGame()
@@ -32,6 +32,16 @@ interface UIModule {
     val abortRequested: SharedFlow<AbortRequestedEvent>
 }
 
+/**
+ * Who offered a draw.
+ *
+ * [name] is a name a player supplied and is shown as it stands - it is not ours to translate.
+ * Where there is none the UI words the offer from [color], and where that is unknown too, as the
+ * opponent. The Orchestrator used to fill those gaps itself with "White" and "opponent", which are
+ * wordings only a UI can choose.
+ */
+data class DrawOffer(val name: String? = null, val color: Color? = null)
+
 data class EngineInfo(val name: String, val author: String)
 
 data class PlatformInfo(val platform: String, val features: List<String>)
@@ -45,7 +55,8 @@ data class LocalGameConfig(
 data class ConfigureEngineGameParams(
     val engineName: String,
     val parameters: List<ParameterDescriptor>,
-    val errorMessage: String? = null,
+    /** Why the previous attempt was refused, when this form is being shown again. */
+    val errorMessage: UIMessage? = null,
 )
 
 data class EngineGameConfig(
@@ -58,7 +69,8 @@ data class ConfigureRemoteGameParams(
     val platform: String,
     val parameters: List<ParameterDescriptor>,
     val seekParameters: List<ParameterDescriptor>,
-    val errorMessage: String? = null,
+    /** Why the previous attempt was refused, when this form is being shown again. */
+    val errorMessage: UIMessage? = null,
 )
 
 data class RemoteGameConfig(
