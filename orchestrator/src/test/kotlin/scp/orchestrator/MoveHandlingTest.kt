@@ -58,7 +58,7 @@ class MoveHandlingTest {
         launchOrchestrator(orchestrator)
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = playerColor, engineSettings = emptyMap(), timeControl = timeControl)
+            EngineGameConfig(playerColor = playerColor, playerName = "Player", engineSettings = emptyMap(), timeControl = timeControl)
         )
         ui.emitNewGameRequested()
         return orchestrator
@@ -318,7 +318,7 @@ class MoveHandlingTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.BLACK, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.BLACK, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e2e4"))
         gc.submitMoveFail = GameError.IllegalMove("e2e5")
@@ -616,7 +616,7 @@ class MoveHandlingTest {
         launchOrchestrator(orchestrator)
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         ui.emitNewGameRequested()
         val gameId = orchestrator.session!!.gameId

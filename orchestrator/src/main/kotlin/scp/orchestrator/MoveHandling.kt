@@ -146,6 +146,8 @@ internal suspend fun Orchestrator.handleEngineMove() {
                         move = moveUci,
                         san = submitResult.value.san,
                         fen = submitResult.value.fen,
+                        // gameState was read before the move, so the side to move is the engine.
+                        color = gameState.turn,
                         clocks = submitResult.value.clocks,
                         isEnPassant = submitResult.value.isEnPassant,
                     ))
@@ -158,6 +160,11 @@ internal suspend fun Orchestrator.handleEngineMove() {
 
 internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEvent) {
     val s = session ?: return
+
+    // Read before the move is applied: the side to move now is the one making it. Afterwards the
+    // turn has passed back to us and nothing left says whose move this was.
+    val moverColor = gameController.getState(s.gameId).getOrNull()?.turn ?: return
+
     val submitResult = gameController.submitMove(SubmitMoveParams(
         gameId = s.gameId,
         move = event.move,
@@ -174,6 +181,7 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
                 move = event.move,
                 san = submitResult.value.san,
                 fen = submitResult.value.fen,
+                color = moverColor,
                 clocks = submitResult.value.clocks,
                 isEnPassant = submitResult.value.isEnPassant,
             ))

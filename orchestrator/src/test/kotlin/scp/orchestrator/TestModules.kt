@@ -165,7 +165,7 @@ class FakeUIModule : UIModule {
     )
     var configureLocalGameResponses: MutableList<Result<UIError, LocalGameConfig>>? = null
     var configureEngineGameResponse: Result<UIError, EngineGameConfig> = Result.Success(
-        EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
     )
     var configureEngineGameResponses: MutableList<Result<UIError, EngineGameConfig>>? = null
     var configureRemoteGameResponse: Result<UIError, RemoteGameConfig> = Result.Success(
@@ -251,7 +251,7 @@ class FakeUIModule : UIModule {
     }
 
     suspend fun emitNewGameRequested() = _newGameRequested.emit(Unit)
-    suspend fun emitMoveReady(gameId: String) = _moveReady.emit(MoveReadyEvent(gameId))
+    suspend fun emitMoveReady(gameId: String, color: Color = Color.WHITE) = _moveReady.emit(MoveReadyEvent(gameId, color))
     suspend fun emitResignRequested(gameId: String, color: Color = Color.WHITE) =
         _resignRequested.emit(ResignRequestedEvent(gameId, color))
     suspend fun emitDrawRequested(gameId: String) = _drawRequested.emit(DrawRequestedEvent(gameId))

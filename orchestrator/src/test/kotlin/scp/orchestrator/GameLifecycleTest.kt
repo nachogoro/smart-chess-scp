@@ -55,7 +55,7 @@ class GameLifecycleTest {
         launchOrchestrator(orchestrator)
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = playerColor, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = playerColor, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         ui.emitNewGameRequested()
         return orchestrator

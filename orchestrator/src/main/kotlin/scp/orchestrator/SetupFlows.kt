@@ -93,6 +93,7 @@ internal suspend fun Orchestrator.setupEngine() {
 
     val baseParams = ConfigureEngineGameParams(
         engineName = caps.name,
+        engineAuthor = caps.author,
         parameters = caps.parameters,
     )
     var errorMessage: UIMessage? = null
@@ -116,8 +117,14 @@ internal suspend fun Orchestrator.setupEngine() {
             is Result.Success -> caps.value
         }
 
+        // Now that the player has a name, both sides of the board have one.
+        val whiteName = if (config.playerColor == Color.WHITE) config.playerName else caps.name
+        val blackName = if (config.playerColor == Color.WHITE) caps.name else config.playerName
+
         val createResult = gameController.create(CreateGameParams(
             timeControl = config.timeControl,
+            whiteName = whiteName,
+            blackName = blackName,
         ))
         if (createResult is Result.Failure) {
             errorMessage = UIMessage.GameCreationFailed(createResult.error)
@@ -134,6 +141,8 @@ internal suspend fun Orchestrator.setupEngine() {
             boardLevel = boardCaps.level,
             playerColor = config.playerColor,
             timeControl = config.timeControl,
+            whiteName = whiteName,
+            blackName = blackName,
             engine = eng,
             initialFen = initialFen,
         )
@@ -142,8 +151,8 @@ internal suspend fun Orchestrator.setupEngine() {
             mode = GameMode.ENGINE,
             playerColor = config.playerColor,
             timeControl = config.timeControl,
-            whiteName = null,
-            blackName = null,
+            whiteName = whiteName,
+            blackName = blackName,
             initialFen = initialFen,
         ))
         startModuleCollectors(session!!)
@@ -162,6 +171,7 @@ internal suspend fun Orchestrator.setupRemote() {
 
     val baseParams = ConfigureRemoteGameParams(
         platform = caps.platform,
+        features = caps.features,
         parameters = caps.parameters,
         seekParameters = caps.seekParameters,
     )

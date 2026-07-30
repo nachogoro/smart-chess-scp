@@ -62,6 +62,7 @@ data class LocalGameConfig(
 
 data class ConfigureEngineGameParams(
     val engineName: String,
+    val engineAuthor: String,
     val parameters: List<ParameterDescriptor>,
     /** Why the previous attempt was refused, when this form is being shown again. */
     val errorMessage: UIMessage? = null,
@@ -69,12 +70,16 @@ data class ConfigureEngineGameParams(
 
 data class EngineGameConfig(
     val playerColor: Color,
+    /** What to call the human player. Null where the UI did not ask for one. */
+    val playerName: String?,
     val engineSettings: Map<String, Any>,
     val timeControl: TimeControl?,
 )
 
 data class ConfigureRemoteGameParams(
     val platform: String,
+    /** What the platform says it supports, e.g. `rated`, `casual`. */
+    val features: List<String>,
     val parameters: List<ParameterDescriptor>,
     val seekParameters: List<ParameterDescriptor>,
     /** Why the previous attempt was refused, when this form is being shown again. */
@@ -90,6 +95,8 @@ data class ShowOpponentMoveParams(
     val move: String,
     val san: String,
     val fen: String,
+    /** The colour the opponent was playing, so a UI can say whose move it is showing. */
+    val color: Color,
     val clocks: Clocks?,
     /** See [SubmitMoveResult.isEnPassant]: the player must clear a square the move does not name. */
     val isEnPassant: Boolean = false,
@@ -100,7 +107,14 @@ sealed class UIError(override val code: String) : ModuleError {
     class Timeout : UIError("TIMEOUT")
 }
 
-data class MoveReadyEvent(val gameId: String)
+/**
+ * The user has finished their physical move.
+ *
+ * [color] is the player who signalled. The orchestrator works out what was actually played by
+ * reading the board rather than from this, because the board is the authority on what moved - but
+ * a UI knows which player pressed, and the protocol has it report that.
+ */
+data class MoveReadyEvent(val gameId: String, val color: Color)
 
 /**
  * A player wants to resign.

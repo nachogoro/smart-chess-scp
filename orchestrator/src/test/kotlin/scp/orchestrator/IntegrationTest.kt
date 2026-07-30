@@ -125,7 +125,7 @@ class IntegrationTest {
             LocalGameConfig(whiteName = "White", blackName = "Black", timeControl = timeControl)
         )
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = playerColor, engineSettings = emptyMap(), timeControl = timeControl)
+            EngineGameConfig(playerColor = playerColor, playerName = "Player", engineSettings = emptyMap(), timeControl = timeControl)
         )
         ui.emitNewGameRequested()
 
@@ -367,6 +367,34 @@ class IntegrationTest {
 
             f.orchestrator.stop()
         }
+
+    @Test
+    fun `an opponent move says which colour played it`() = runTest(UnconfinedTestDispatcher()) {
+        // ui.showOpponentMove carries the colour (PROTOCOL.md 4.6). It has to be read before the
+        // move is applied - afterwards the turn has passed back and nothing says whose it was.
+        val engine = FirstLegalMoveEngine()
+        val f = startGame(mode = GameMode.ENGINE, engines = listOf(engine), playerColor = Color.WHITE)
+
+        f.playFromBoard("e2e4")
+
+        assertEquals(Color.BLACK, assertNotNull(f.ui.lastOpponentMove).color)
+
+        f.orchestrator.stop()
+    }
+
+    @Test
+    fun `an engine game names both sides of the board`() = runTest(UnconfinedTestDispatcher()) {
+        // ui.configureEngineGame returns the player's name, so the game has one for each side
+        // rather than the two nulls it used to be created with.
+        val engine = FirstLegalMoveEngine()
+        val f = startGame(mode = GameMode.ENGINE, engines = listOf(engine), playerColor = Color.BLACK)
+
+        val started = assertNotNull(f.ui.lastGameStartedInfo)
+        assertEquals("Player", started.blackName, "the human plays black here")
+        assertEquals("Test", started.whiteName, "and the engine is named from its capabilities")
+
+        f.orchestrator.stop()
+    }
 
     @Test
     fun `an engine game alternates until someone is mated`() = runTest(UnconfinedTestDispatcher()) {

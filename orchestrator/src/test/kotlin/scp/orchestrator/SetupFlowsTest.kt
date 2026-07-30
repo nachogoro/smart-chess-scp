@@ -142,7 +142,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = mapOf("Depth" to 10), timeControl = null)
+            EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = mapOf("Depth" to 10), timeControl = null)
         )
         ui.emitNewGameRequested()
 
@@ -162,7 +162,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.BLACK, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.BLACK, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e2e4"))
 
@@ -201,7 +201,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponses = mutableListOf(
-            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
         ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         board.failWith = BoardError.Disconnected()
@@ -220,7 +220,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponses = mutableListOf(
-            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
         ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         gc.createFail = GameError.GameNotFound()
@@ -255,7 +255,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponses = mutableListOf(
-            Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
+            Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
         ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
         engine.configureFail = EngineError.NotConfigured()
@@ -460,7 +460,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         // selectEngineResponse should not be called for single engine
         ui.selectEngineResponse = Result.Failure(UIError.Cancelled())
@@ -484,7 +484,7 @@ class SetupFlowsTest {
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.selectEngineResponse = Result.Success("0")
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         ui.emitNewGameRequested()
 
@@ -506,7 +506,7 @@ class SetupFlowsTest {
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.selectEngineResponse = Result.Success("1")
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         ui.emitNewGameRequested()
 
