@@ -21,8 +21,8 @@ interface UIModule {
     suspend fun onGameStarted(info: GameStartedInfo)
     suspend fun onGameEnded(summary: GameSummary)
     suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit>
-    suspend fun displayError(message: String): Result<UIError, Unit>
-    suspend fun boardDesync(expectedFen: String, message: String): Result<UIError, Unit>
+    suspend fun displayError(message: UIMessage): Result<UIError, Unit>
+    suspend fun boardDesync(expectedFen: String, message: UIMessage): Result<UIError, Unit>
 
     // Events
     val newGameRequested: SharedFlow<Unit>

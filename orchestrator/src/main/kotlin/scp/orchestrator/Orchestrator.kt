@@ -37,7 +37,7 @@ class Orchestrator(
                 session = null
                 state = OrchestratorState.Idle
                 try {
-                    ui.displayError("Unexpected error: ${e.message}")
+                    ui.displayError(UIMessage.UnexpectedFailure(e.message))
                 } catch (_: Exception) {}
             }
         }
@@ -133,15 +133,15 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.BoardError -> {
-                    ui.displayError("Board error: ${event.event.message}")
+                    ui.displayError(UIMessage.BoardFailed(event.event))
                     return
                 }
                 is OrchestratorEvent.EngineError -> {
-                    ui.displayError("Engine error: ${event.event.message}")
+                    ui.displayError(UIMessage.EngineFailed(event.event))
                     return
                 }
                 is OrchestratorEvent.RemoteError -> {
-                    ui.displayError("Remote error: ${event.event.message}")
+                    ui.displayError(UIMessage.RemoteFailed(event.event))
                     return
                 }
                 else -> {} // Fall through to state-specific handling
@@ -179,7 +179,7 @@ class Orchestrator(
                 ))
                 when (createResult) {
                     is Result.Failure -> {
-                        ui.displayError("Failed to create game: ${createResult.error.message}")
+                        ui.displayError(UIMessage.GameCreationFailed(createResult.error))
                         session?.remote?.disconnect()
                         endGame(termination = Termination.Other())
                     }

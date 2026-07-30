@@ -9,7 +9,7 @@ internal suspend fun Orchestrator.handleMoveReady() {
     val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
     val boardState = board.getState().getOrNull() ?: run {
-        ui.displayError("Failed to read board state")
+        ui.displayError(UIMessage.BoardReadFailed)
         return
     }
 
@@ -28,12 +28,12 @@ internal suspend fun Orchestrator.handleMoveReady() {
         // Not a desync: the position is exactly the one expected, so there is nothing to reconcile
         // and no need for the heavier out-of-sync dialog.
         is InferenceOutcome.Unchanged -> {
-            ui.displayError("The board has not changed. Move a piece, then tap again.")
+            ui.displayError(UIMessage.BoardUnchanged)
             return
         }
 
         is InferenceOutcome.NoMatch -> {
-            ui.boardDesync(gameState.fen, "Board does not match any legal move")
+            ui.boardDesync(gameState.fen, UIMessage.NoLegalMoveMatches)
             return
         }
     }
@@ -41,7 +41,7 @@ internal suspend fun Orchestrator.handleMoveReady() {
     val submitResult = gameController.submitMove(SubmitMoveParams(gameId = s.gameId, move = uci))
     when (submitResult) {
         is Result.Failure -> {
-            ui.displayError("Move rejected: ${submitResult.error.message}")
+            ui.displayError(UIMessage.MoveRejected(submitResult.error))
             return
         }
         is Result.Success -> {
@@ -54,7 +54,7 @@ internal suspend fun Orchestrator.handleMoveReady() {
                 scope.launch {
                     val sent = s.remote?.sendMove(uci)
                     if (sent is Result.Failure) {
-                        ui.displayError("Failed to send move to the server: ${sent.error.message}")
+                        ui.displayError(UIMessage.MoveNotSent(sent.error))
                     }
                 }
             } else {
@@ -78,7 +78,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
     when (bestMove) {
         is Result.Failure -> {
             debugLog("[orchestrator] Engine returned error: ${bestMove.error.code}: ${bestMove.error.message}")
-            ui.displayError("Engine error: ${bestMove.error.message}")
+            ui.displayError(UIMessage.EngineFailed(bestMove.error))
             return
         }
         is Result.Success -> {
@@ -88,7 +88,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
             when (submitResult) {
                 is Result.Failure -> {
                     debugLog("[orchestrator] Engine move REJECTED: move=$moveUci fen=${gameState.fen} error=${submitResult.error.message}")
-                    ui.displayError("Engine move rejected: ${submitResult.error.message}")
+                    ui.displayError(UIMessage.EngineMoveRejected(submitResult.error))
                     return
                 }
                 is Result.Success -> {
@@ -116,7 +116,7 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
     ))
     when (submitResult) {
         is Result.Failure -> {
-            ui.displayError("Opponent move rejected: ${submitResult.error.message}")
+            ui.displayError(UIMessage.OpponentMoveRejected(submitResult.error))
             return
         }
         is Result.Success -> {
@@ -184,7 +184,7 @@ internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
             gameController.respondDraw(s.gameId, accepted)
         }
         GameMode.ENGINE -> {
-            ui.displayError("Draw offers are not supported against the engine")
+            ui.displayError(UIMessage.DrawNotSupportedByEngine)
         }
         GameMode.REMOTE -> {
             s.remote?.offerDraw()

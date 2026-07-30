@@ -174,8 +174,8 @@ class FakeUIModule : UIModule {
     var lastGameStartedInfo: GameStartedInfo? = null
     var lastGameSummary: GameSummary? = null
     var lastOpponentMove: ShowOpponentMoveParams? = null
-    var lastError: String? = null
-    var lastDesync: Pair<String, String>? = null
+    var lastError: UIMessage? = null
+    var lastDesync: Pair<String, UIMessage>? = null
     var displayErrorCount = 0
 
     var lastConfigureLocalError: String? = null
@@ -227,13 +227,13 @@ class FakeUIModule : UIModule {
         return Result.Success(Unit)
     }
 
-    override suspend fun displayError(message: String): Result<UIError, Unit> {
+    override suspend fun displayError(message: UIMessage): Result<UIError, Unit> {
         lastError = message
         displayErrorCount++
         return Result.Success(Unit)
     }
 
-    override suspend fun boardDesync(expectedFen: String, message: String): Result<UIError, Unit> {
+    override suspend fun boardDesync(expectedFen: String, message: UIMessage): Result<UIError, Unit> {
         lastDesync = expectedFen to message
         return Result.Success(Unit)
     }

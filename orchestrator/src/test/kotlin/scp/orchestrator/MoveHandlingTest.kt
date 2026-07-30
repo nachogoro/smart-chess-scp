@@ -157,7 +157,7 @@ class MoveHandlingTest {
             ui.emitMoveReady(gameId)
 
             assertNull(ui.lastDesync)
-            assertEquals("The board has not changed. Move a piece, then tap again.", ui.lastError)
+            assertEquals(UIMessage.BoardUnchanged, ui.lastError)
 
             orchestrator.stop()
         }
@@ -174,7 +174,7 @@ class MoveHandlingTest {
         gc.submitMoveFail = GameError.IllegalMove("Not your turn")
         ui.emitMoveReady(gameId)
 
-        assertEquals("Move rejected: Not your turn", ui.lastError)
+        assertEquals("ILLEGAL_MOVE", assertIs<UIMessage.MoveRejected>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -188,7 +188,7 @@ class MoveHandlingTest {
         board.failWith = BoardError.SensorFailure()
         ui.emitMoveReady(gameId)
 
-        assertEquals("Failed to read board state", ui.lastError)
+        assertEquals(UIMessage.BoardReadFailed, ui.lastError)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -249,7 +249,7 @@ class MoveHandlingTest {
         engine.bestMoveResponse = Result.Failure(EngineError.EngineCrashed("Process died"))
         ui.emitMoveReady(gameId)
 
-        assertEquals("Engine error: Process died", ui.lastError)
+        assertEquals("ENGINE_CRASHED", assertIs<UIMessage.EngineFailed>(ui.lastError).error.code)
 
         orchestrator.stop()
     }
@@ -268,7 +268,7 @@ class MoveHandlingTest {
         gc.submitMoveFail = GameError.IllegalMove("Invalid engine move")
         ui.emitNewGameRequested()
 
-        assertEquals("Engine move rejected: Invalid engine move", ui.lastError)
+        assertEquals("ILLEGAL_MOVE", assertIs<UIMessage.EngineMoveRejected>(ui.lastError).error.code)
 
         orchestrator.stop()
     }
@@ -527,7 +527,7 @@ class MoveHandlingTest {
 
         ui.emitDrawRequested(gameId)
 
-        assertEquals("Draw offers are not supported against the engine", ui.lastError)
+        assertEquals(UIMessage.DrawNotSupportedByEngine, ui.lastError)
 
         orchestrator.stop()
     }

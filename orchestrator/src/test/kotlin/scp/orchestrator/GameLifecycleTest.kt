@@ -190,7 +190,7 @@ class GameLifecycleTest {
 
         board.emitError(BoardErrorEvent(code = "SENSOR_FAILURE", message = "Sensor malfunction"))
 
-        assertEquals("Board error: Sensor malfunction", ui.lastError)
+        assertEquals("SENSOR_FAILURE", assertIs<UIMessage.BoardFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -202,7 +202,7 @@ class GameLifecycleTest {
 
         engine.emitError(EngineErrorEvent(code = "ENGINE_CRASHED", message = "Engine process died"))
 
-        assertEquals("Engine error: Engine process died", ui.lastError)
+        assertEquals("ENGINE_CRASHED", assertIs<UIMessage.EngineFailed>(ui.lastError).error.code)
 
         orchestrator.stop()
     }
@@ -215,7 +215,7 @@ class GameLifecycleTest {
 
         remote.emitError(RemoteErrorEvent(code = "CONNECTION_LOST", message = "Connection lost"))
 
-        assertEquals("Remote error: Connection lost", ui.lastError)
+        assertEquals("CONNECTION_LOST", assertIs<UIMessage.RemoteFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()

@@ -241,7 +241,7 @@ class SetupFlowsTest {
         engine.capabilitiesFail = EngineError.EngineCrashed()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read engine capabilities", ui.lastError)
+        assertEquals(UIMessage.EngineCapabilitiesUnavailable, ui.lastError)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
         assertNull(orchestrator.session)
 
@@ -378,7 +378,7 @@ class SetupFlowsTest {
         remote.capabilitiesFail = RemoteError.NotConnected()
         ui.emitNewGameRequested()
 
-        assertEquals("Failed to read remote capabilities", ui.lastError)
+        assertEquals(UIMessage.RemoteCapabilitiesUnavailable, ui.lastError)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
         assertNull(orchestrator.session)
 
@@ -441,7 +441,7 @@ class SetupFlowsTest {
             opponent = "opp", fen = startFen, timeControl = null,
         ))
 
-        assertEquals("Failed to create game: Creation failed", ui.lastError)
+        assertEquals("GAME_NOT_FOUND", assertIs<UIMessage.GameCreationFailed>(ui.lastError).error.code)
         assertTrue(remote.disconnectCalled)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
         assertNull(orchestrator.session)

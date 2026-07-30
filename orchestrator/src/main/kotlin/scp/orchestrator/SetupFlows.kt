@@ -71,7 +71,7 @@ internal suspend fun Orchestrator.setupEngine() {
     val eng = selectEngine() ?: return
 
     val caps = eng.getCapabilities().getOrNull() ?: run {
-        ui.displayError("Failed to read engine capabilities")
+        ui.displayError(UIMessage.EngineCapabilitiesUnavailable)
         return
     }
 
@@ -135,7 +135,7 @@ internal suspend fun Orchestrator.setupRemote() {
     val rem = selectRemote() ?: return
 
     val caps = rem.getCapabilities().getOrNull() ?: run {
-        ui.displayError("Failed to read remote capabilities")
+        ui.displayError(UIMessage.RemoteCapabilitiesUnavailable)
         return
     }
 
