@@ -62,8 +62,8 @@ data class SubmitMoveResult(
 
 data class SetResultParams(
     val gameId: String,
-    val result: String,
-    val reason: String,
+    val result: GameResult,
+    val termination: Termination,
 )
 
 data class GameHistory(val moves: List<GameHistoryMove>)

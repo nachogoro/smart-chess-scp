@@ -137,11 +137,11 @@ class GameLifecycleTest {
     fun `remote game ended sets result and transitions to Idle`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startRemoteGame(Color.WHITE)
 
-        remote.emitGameEnded(RemoteGameEndedEvent(result = "0-1", reason = "resign"))
+        remote.emitGameEnded(RemoteGameEndedEvent(result = GameResult.BLACK_WINS, termination = Termination.Resignation))
 
         assertNotNull(gc.lastSetResult)
-        assertEquals("0-1", gc.lastSetResult!!.result)
-        assertEquals("resign", gc.lastSetResult!!.reason)
+        assertEquals(GameResult.BLACK_WINS, gc.lastSetResult!!.result)
+        assertEquals(Termination.Resignation, gc.lastSetResult!!.termination)
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         orchestrator.stop()
@@ -352,13 +352,13 @@ class GameLifecycleTest {
         val orchestrator = startRemoteGame(Color.WHITE)
         val gameId = orchestrator.session!!.gameId
 
-        remote.emitGameEnded(RemoteGameEndedEvent(result = "0-1", reason = "resign"))
+        remote.emitGameEnded(RemoteGameEndedEvent(result = GameResult.BLACK_WINS, termination = Termination.Resignation))
 
         val summary = ui.lastGameSummary
         assertNotNull(summary)
         assertEquals(gameId, summary.gameId)
         assertEquals(GameResult.BLACK_WINS, summary.result)
-        assertEquals(Termination.Other(text = "resign"), summary.termination)
+        assertEquals(Termination.Resignation, summary.termination)
         assertEquals(GameMode.REMOTE, summary.mode)
         assertEquals(Color.WHITE, summary.playerColor)
 

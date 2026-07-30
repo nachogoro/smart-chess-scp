@@ -113,14 +113,9 @@ class Orchestrator(
                     gameController.setResult(SetResultParams(
                         gameId = session!!.gameId,
                         result = event.event.result,
-                        reason = event.event.reason,
+                        termination = event.event.termination,
                     ))
-                    // A remote still reports its ending as prose, so it can only be passed on
-                    // unclassified. Classifying it at the adapter is the next step.
-                    endGame(
-                        result = GameResult.fromProtocolString(event.event.result),
-                        termination = Termination.Other(text = event.event.reason),
-                    )
+                    endGame(result = event.event.result, termination = event.event.termination)
                     return
                 }
                 is OrchestratorEvent.ResignRequested -> {

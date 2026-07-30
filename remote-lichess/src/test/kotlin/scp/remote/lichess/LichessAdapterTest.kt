@@ -504,8 +504,8 @@ class LichessAdapterTest {
         advanceUntilIdle()
 
         assertTrue(endings.isNotEmpty())
-        assertEquals("1-0", endings.first().result)
-        assertEquals("checkmate", endings.first().reason)
+        assertEquals(GameResult.WHITE_WINS, endings.first().result)
+        assertEquals(Termination.Checkmate, endings.first().termination)
 
         collectJob.cancel()
         adapter.disconnect()
@@ -529,11 +529,35 @@ class LichessAdapterTest {
         api.gameStreamChannel.send(gameState(status = "resign", winner = "black"))
         advanceUntilIdle()
 
-        assertEquals("0-1", endings.first().result)
-        assertEquals("resignation", endings.first().reason)
+        assertEquals(GameResult.BLACK_WINS, endings.first().result)
+        assertEquals(Termination.Resignation, endings.first().termination)
 
         collectJob.cancel()
         adapter.disconnect()
+    }
+
+    @Test
+    fun `every terminal Lichess status maps to a termination`() {
+        // The point of the Other cases: a status this protocol does not name must not be pushed
+        // into the nearest code, and one Lichess adds tomorrow must still arrive intact rather
+        // than being guessed at.
+        val expected = mapOf(
+            "mate" to Termination.Checkmate,
+            "resign" to Termination.Resignation,
+            "stalemate" to Termination.Stalemate,
+            "timeout" to Termination.Timeout,
+            "outoftime" to Termination.Timeout,
+            "aborted" to Termination.Aborted,
+            "noStart" to Termination.Aborted,
+            "draw" to Termination.Drawn(DrawKind.Other(authorityCode = "draw")),
+            "cheat" to Termination.Other(authorityCode = "cheat", text = "fair play violation"),
+            "variantEnd" to Termination.Other(authorityCode = "variantEnd", text = "variant end"),
+            "somethingLichessAddsLater" to Termination.Other(authorityCode = "somethingLichessAddsLater"),
+        )
+
+        for ((status, termination) in expected) {
+            assertEquals(termination, mapLichessTermination(status), "for status '$status'")
+        }
     }
 
     @Test
@@ -554,7 +578,7 @@ class LichessAdapterTest {
         api.gameStreamChannel.send(gameState(status = "draw"))
         advanceUntilIdle()
 
-        assertEquals("1/2-1/2", endings.first().result)
+        assertEquals(GameResult.DRAW, endings.first().result)
 
         collectJob.cancel()
         adapter.disconnect()
@@ -579,7 +603,7 @@ class LichessAdapterTest {
         api.gameStreamChannel.send(gameState(status = "outoftime", winner = null))
         advanceUntilIdle()
 
-        assertEquals("1/2-1/2", endings.first().result)
+        assertEquals(GameResult.DRAW, endings.first().result)
 
         collectJob.cancel()
         adapter.disconnect()

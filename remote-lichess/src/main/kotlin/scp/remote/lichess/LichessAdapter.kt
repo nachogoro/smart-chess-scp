@@ -564,11 +564,11 @@ class LichessAdapter(
         // Check for terminal status
         if (isTerminalStatus(state.status)) {
             val result = mapLichessResult(state.status, state.winner, color)
-            val reason = mapLichessReason(state.status)
-            debugLog("Game ended: status=${state.status} winner=${state.winner} result=$result reason=$reason")
+            val termination = mapLichessTermination(state.status)
+            debugLog("Game ended: status=${state.status} winner=${state.winner} result=$result termination=${termination.code}")
             currentGameId = null
             gameStreamJob?.cancel()
-            _gameEnded.emit(RemoteGameEndedEvent(result = result, reason = reason))
+            _gameEnded.emit(RemoteGameEndedEvent(result = result, termination = termination))
             return
         }
 
@@ -599,31 +599,42 @@ class LichessAdapter(
      * - `"1/2-1/2"` — draw (including `outoftime` with no winner, i.e. insufficient material)
      * - `"*"` — game aborted or indeterminate
      */
-    private fun mapLichessResult(status: String, winner: String?, myColor: Color): String {
-        if (status == "draw" || status == "stalemate") return "1/2-1/2"
-        if (status == "aborted" || status == "noStart") return "*"
+    private fun mapLichessResult(status: String, winner: String?, myColor: Color): GameResult {
+        if (status == "draw" || status == "stalemate") return GameResult.DRAW
+        if (status == "aborted" || status == "noStart") return GameResult.IN_PROGRESS
 
         return when (winner) {
-            "white" -> "1-0"
-            "black" -> "0-1"
+            "white" -> GameResult.WHITE_WINS
+            "black" -> GameResult.BLACK_WINS
             null -> {
                 // outoftime with no winner = draw (insufficient material)
-                if (status == "outoftime") "1/2-1/2" else "*"
+                if (status == "outoftime") GameResult.DRAW else GameResult.IN_PROGRESS
             }
-            else -> "*"
+            else -> GameResult.IN_PROGRESS
         }
     }
 
     /** Maps a Lichess status string to a human-readable termination reason. */
-    private fun mapLichessReason(status: String): String = when (status) {
-        "mate" -> "checkmate"
-        "resign" -> "resignation"
-        "stalemate" -> "stalemate"
-        "timeout", "outoftime" -> "timeout"
-        "draw" -> "draw"
-        "aborted", "noStart" -> "aborted"
-        "cheat" -> "fair play violation"
-        "variantEnd" -> "variant end"
-        else -> status
-    }
+}
+
+/**
+ * Lichess's game status, as one of this protocol's terminations.
+ *
+ * Statuses with no counterpart here are reported as Other rather than being pushed into the
+ * nearest code: a UI can then say honestly that Lichess ended the game for a reason it does
+ * not recognise, and can special-case the authority code itself if it wants to.
+ *
+ * `draw` covers every rule Lichess draws a game under and it does not say which, so the kind
+ * is unnamed rather than guessed at.
+ */
+internal fun mapLichessTermination(status: String): Termination = when (status) {
+    "mate" -> Termination.Checkmate
+    "resign" -> Termination.Resignation
+    "stalemate" -> Termination.Stalemate
+    "timeout", "outoftime" -> Termination.Timeout
+    "aborted", "noStart" -> Termination.Aborted
+    "draw" -> Termination.Drawn(DrawKind.Other(authorityCode = status))
+    "cheat" -> Termination.Other(authorityCode = status, text = "fair play violation")
+    "variantEnd" -> Termination.Other(authorityCode = status, text = "variant end")
+    else -> Termination.Other(authorityCode = status)
 }

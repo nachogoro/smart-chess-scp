@@ -260,12 +260,10 @@ class GameController(
         }
 
         game.timerJob?.cancel()
-        game.result = GameResult.fromProtocolString(params.result)
-        game.status = statusFromExternalResult(params.result, params.reason)
+        game.result = params.result
+        game.status = statusFrom(params.termination, params.result)
 
-        // An external authority still reports its reason as prose, so it can only be passed on as
-        // an unclassified ending. Classifying it at the adapter is the next step.
-        emitGameEnded(game, Termination.Other(text = params.reason))
+        emitGameEnded(game, params.termination)
 
         return Result.Success(Unit)
     }
@@ -355,17 +353,26 @@ class GameController(
         else -> DrawKind.Other()
     }
 
-    private fun statusFromExternalResult(result: String, reason: String): GameStatus {
-        return when {
-            reason.contains("resign", ignoreCase = true) -> GameStatus.RESIGNED
-            reason.contains("timeout", ignoreCase = true) ||
-                reason.contains("time", ignoreCase = true) -> GameStatus.TIMEOUT
-            reason.contains("abort", ignoreCase = true) -> GameStatus.ABORTED
-            result == "1/2-1/2" -> GameStatus.DRAW
-            result == "1-0" || result == "0-1" -> GameStatus.RESIGNED
-            else -> GameStatus.DRAW
+    /**
+     * The status an external authority's ending puts the game into.
+     *
+     * Total, and decided by the termination rather than by the wording of it. The exception is
+     * [Termination.Other], where the authority reported an ending this protocol does not name and
+     * the result is genuinely all there is to go on.
+     */
+    private fun statusFrom(termination: Termination, result: GameResult): GameStatus =
+        when (termination) {
+            Termination.Checkmate -> GameStatus.CHECKMATE
+            Termination.Stalemate -> GameStatus.STALEMATE
+            Termination.Resignation -> GameStatus.RESIGNED
+            Termination.Timeout -> GameStatus.TIMEOUT
+            Termination.Aborted -> GameStatus.ABORTED
+            is Termination.Drawn -> GameStatus.DRAW
+            is Termination.Other -> when (result) {
+                GameResult.WHITE_WINS, GameResult.BLACK_WINS -> GameStatus.RESIGNED
+                GameResult.DRAW, GameResult.IN_PROGRESS -> GameStatus.DRAW
+            }
         }
-    }
 
     private fun startFlagFallTimer(game: InternalGame) {
         game.timerJob?.cancel()

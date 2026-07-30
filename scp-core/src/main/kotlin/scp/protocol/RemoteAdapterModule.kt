@@ -45,8 +45,15 @@ data class OpponentMoveEvent(
 )
 
 data class RemoteGameEndedEvent(
-    val result: String,
-    val reason: String,
+    val result: GameResult,
+    /**
+     * How the server ended the game.
+     *
+     * An adapter classifies rather than describes. A status with no counterpart in [Termination]
+     * is reported as [Termination.Other] carrying the server's own identifier and wording, not as
+     * the nearest code that happens to fit.
+     */
+    val termination: Termination,
 )
 
 sealed class RemoteError(val code: String, val message: String) {

@@ -358,7 +358,7 @@ class GameControllerTest {
         val gameId = createGame(gc, authority = Authority.EXTERNAL)
         gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4"))
 
-        val result = gc.setResult(SetResultParams(gameId, "0-1", "resignation"))
+        val result = gc.setResult(SetResultParams(gameId, GameResult.BLACK_WINS, Termination.Resignation))
         assertIs<Result.Success<Unit>>(result)
 
         val state = gc.getState(gameId)
@@ -368,11 +368,54 @@ class GameControllerTest {
     }
 
     @Test
+    fun `setResult takes the status from the termination`() = runTest {
+        // Previously inferred by substring-matching the reason, which got checkmate wrong: no
+        // branch matched "checkmate", so a 1-0 result fell through to RESIGNED.
+        val cases = listOf(
+            Termination.Checkmate to GameStatus.CHECKMATE,
+            Termination.Stalemate to GameStatus.STALEMATE,
+            Termination.Resignation to GameStatus.RESIGNED,
+            Termination.Timeout to GameStatus.TIMEOUT,
+            Termination.Aborted to GameStatus.ABORTED,
+            Termination.Drawn(DrawKind.Agreement) to GameStatus.DRAW,
+        )
+
+        for ((termination, expected) in cases) {
+            val gc = GameController(backgroundScope)
+            val gameId = createGame(gc, authority = Authority.EXTERNAL)
+            gc.setResult(SetResultParams(gameId, GameResult.WHITE_WINS, termination))
+
+            val state = gc.getState(gameId)
+            assertIs<Result.Success<GameState>>(state)
+            assertEquals(expected, state.value.status, "for $termination")
+        }
+    }
+
+    @Test
+    fun `setResult falls back to the result for an unnamed termination`() = runTest {
+        // A server ending a game for a reason this protocol does not name: the result is all
+        // there is to go on, and the game must still reach a terminal status.
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc, authority = Authority.EXTERNAL)
+
+        gc.setResult(SetResultParams(
+            gameId,
+            GameResult.WHITE_WINS,
+            Termination.Other(authorityCode = "variantEnd", text = "variant end"),
+        ))
+
+        val state = gc.getState(gameId)
+        assertIs<Result.Success<GameState>>(state)
+        assertEquals(GameStatus.RESIGNED, state.value.status)
+        assertEquals(GameResult.WHITE_WINS, state.value.result)
+    }
+
+    @Test
     fun `setResult fails for local authority`() = runTest {
         val gc = GameController(backgroundScope)
         val gameId = createGame(gc)
 
-        val result = gc.setResult(SetResultParams(gameId, "0-1", "resignation"))
+        val result = gc.setResult(SetResultParams(gameId, GameResult.BLACK_WINS, Termination.Resignation))
         assertIs<Result.Failure<GameError>>(result)
         assertIs<GameError.InvalidAuthority>(result.error)
     }
@@ -381,9 +424,9 @@ class GameControllerTest {
     fun `setResult fails on finished game`() = runTest {
         val gc = GameController(backgroundScope)
         val gameId = createGame(gc, authority = Authority.EXTERNAL)
-        gc.setResult(SetResultParams(gameId, "0-1", "resignation"))
+        gc.setResult(SetResultParams(gameId, GameResult.BLACK_WINS, Termination.Resignation))
 
-        val result = gc.setResult(SetResultParams(gameId, "1-0", "timeout"))
+        val result = gc.setResult(SetResultParams(gameId, GameResult.WHITE_WINS, Termination.Timeout))
         assertIs<Result.Failure<GameError>>(result)
         assertIs<GameError.GameOver>(result.error)
     }
