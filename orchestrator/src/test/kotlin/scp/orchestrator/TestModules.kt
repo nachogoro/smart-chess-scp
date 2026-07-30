@@ -94,8 +94,13 @@ open class FakeGameControllerModule : GameControllerModule {
         return Result.Success(SubmitMoveResult(fen = newFen, san = san, status = GameStatus.IN_PROGRESS, clocks = state.clocks))
     }
 
+    // Announces the ending, as the real controller does: game.ended is how any ending reaches
+    // the orchestrator, and a fake that stays quiet lets a caller look correct while the ending
+    // it caused goes unreported.
     override suspend fun resign(gameId: String, color: Color): Result<GameError, Unit> {
         lastResign = gameId to color
+        val winner = if (color == Color.WHITE) GameResult.BLACK_WINS else GameResult.WHITE_WINS
+        _gameEnded.emit(GameEndedEvent(gameId, winner, Termination.Resignation, games[gameId]?.fen.orEmpty()))
         return Result.Success(Unit)
     }
 
@@ -116,6 +121,9 @@ open class FakeGameControllerModule : GameControllerModule {
 
     override suspend fun abort(gameId: String): Result<GameError, Unit> {
         lastAbort = gameId
+        _gameEnded.emit(
+            GameEndedEvent(gameId, GameResult.IN_PROGRESS, Termination.Aborted, games[gameId]?.fen.orEmpty())
+        )
         return Result.Success(Unit)
     }
 
@@ -317,6 +325,7 @@ class FakeRemoteModule : RemoteAdapterModule {
     var lastSeekSettings: Map<String, Any>? = null
     var lastSentMove: String? = null
     var resignCalled = false
+    var abortCalled = false
     var drawOfferCalled = false
     var lastDrawResponse: Boolean? = null
     var disconnectCalled = false
@@ -347,6 +356,11 @@ class FakeRemoteModule : RemoteAdapterModule {
 
     override suspend fun resign(): Result<RemoteError, Unit> {
         resignCalled = true
+        return Result.Success(Unit)
+    }
+
+    override suspend fun abort(): Result<RemoteError, Unit> {
+        abortCalled = true
         return Result.Success(Unit)
     }
 

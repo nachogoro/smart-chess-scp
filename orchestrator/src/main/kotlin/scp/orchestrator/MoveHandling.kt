@@ -195,10 +195,39 @@ internal suspend fun Orchestrator.handleResign() {
             gameController.resign(s.gameId, playerColor)
         }
         GameMode.REMOTE -> {
-            s.remote?.resign()
-            val playerColor = s.playerColor ?: return
-            gameController.resign(s.gameId, playerColor)
+            // The server is the authority on how a remote game ends (PROTOCOL.md §6.3), so this
+            // asks and waits for remote.gameEnded rather than deciding. Resigning locally as well
+            // committed to an outcome the server had not agreed to: if it refused the request -
+            // not your game, already over, lost in transit - the local game was over anyway, and
+            // the setResult that should have relayed the real ending arrived to find it finished.
+            val sent = s.remote?.resign()
+            if (sent is Result.Failure) {
+                ui.displayError(UIMessage.RemoteFailed(sent.error))
+            }
         }
+    }
+}
+
+/**
+ * Aborts the game, by whichever route this mode's authority requires.
+ *
+ * The local game controller announces the ending itself on game.ended, so nothing here ends the
+ * session: doing both is what made every locally decided ending arrive as OTHER.
+ */
+internal suspend fun Orchestrator.handleAbort() {
+    val s = session ?: return
+
+    if (s.mode == GameMode.REMOTE) {
+        val sent = s.remote?.abort()
+        if (sent is Result.Failure) {
+            ui.displayError(UIMessage.RemoteFailed(sent.error))
+        }
+        return
+    }
+
+    val aborted = gameController.abort(s.gameId)
+    if (aborted is Result.Failure) {
+        ui.displayError(UIMessage.UnexpectedFailure(aborted.error.code))
     }
 }
 

@@ -431,17 +431,26 @@ class MoveHandlingTest {
     }
 
     @Test
-    fun `resign in remote game also notifies remote server`() = runTest(UnconfinedTestDispatcher()) {
-        val orchestrator = startRemoteGame(Color.WHITE)
-        val gameId = orchestrator.session!!.gameId
+    fun `resign in remote game is asked of the server, not decided here`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val orchestrator = startRemoteGame(Color.WHITE)
+            val gameId = orchestrator.session!!.gameId
 
-        ui.emitResignRequested(gameId)
+            ui.emitResignRequested(gameId)
 
-        assertTrue(remote.resignCalled)
-        assertNotNull(gc.lastResign)
+            assertTrue(remote.resignCalled)
+            // Resigning locally as well committed to an outcome the server had not agreed to,
+            // and left the setResult relaying the real ending to find the game already over.
+            assertNull(gc.lastResign)
+            assertNotNull(orchestrator.session)
 
-        orchestrator.stop()
-    }
+            remote.emitGameEnded(RemoteGameEndedEvent(GameResult.BLACK_WINS, Termination.Resignation))
+
+            assertIs<OrchestratorState.Idle>(orchestrator.state)
+            assertEquals(Termination.Resignation, ui.lastGameSummary?.termination)
+
+            orchestrator.stop()
+        }
 
     // -----------------------------------------------------------------------
     // Draw

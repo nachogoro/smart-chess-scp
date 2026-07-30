@@ -9,6 +9,15 @@ interface RemoteAdapterModule {
     suspend fun cancelSeek(): Result<RemoteError, Unit>
     suspend fun sendMove(move: String): Result<RemoteError, Unit>
     suspend fun resign(): Result<RemoteError, Unit>
+
+    /**
+     * Abort the current game on the remote platform.
+     *
+     * Distinct from [resign]: platforms allow it only before a game is properly under way, and it
+     * ends in no result rather than a loss. Like every other way a remote game can end, the
+     * outcome arrives on [gameEnded] rather than from this call (PROTOCOL.md §6.3).
+     */
+    suspend fun abort(): Result<RemoteError, Unit>
     suspend fun offerDraw(): Result<RemoteError, Unit>
     suspend fun respondDraw(accept: Boolean): Result<RemoteError, Unit>
     suspend fun disconnect(): Result<RemoteError, Unit>

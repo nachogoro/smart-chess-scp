@@ -327,6 +327,19 @@ class LichessAdapter(
         }
     }
 
+    /** Aborts the current game, which Lichess allows only within its first moves. */
+    override suspend fun abort(): Result<RemoteError, Unit> {
+        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
+
+        return try {
+            api.abort(t, gameId)
+            Result.Success(Unit)
+        } catch (e: Exception) {
+            Result.Failure(e.toRemoteError())
+        }
+    }
+
     /** Offers a draw to the opponent in the current game. */
     override suspend fun offerDraw(): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())

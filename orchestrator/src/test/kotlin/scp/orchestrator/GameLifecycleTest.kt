@@ -223,17 +223,29 @@ class GameLifecycleTest {
     }
 
     @Test
-    fun `abort in remote game disconnects from remote`() = runTest(UnconfinedTestDispatcher()) {
-        val orchestrator = startRemoteGame(Color.WHITE)
-        val gameId = orchestrator.session!!.gameId
+    fun `abort in remote game is asked of the server, not decided here`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val orchestrator = startRemoteGame(Color.WHITE)
+            val gameId = orchestrator.session!!.gameId
 
-        ui.emitAbortRequested(gameId)
+            ui.emitAbortRequested(gameId)
 
-        assertTrue(remote.disconnectCalled)
-        assertIs<OrchestratorState.Idle>(orchestrator.state)
+            assertTrue(remote.abortCalled)
+            // The server is the authority on how a remote game ends (PROTOCOL.md 6.3), so the
+            // game stays live until it says otherwise. Ending it here would commit to an outcome
+            // the server might refuse, with no way back.
+            assertNull(gc.lastAbort)
+            assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
+            assertNotNull(orchestrator.session)
 
-        orchestrator.stop()
-    }
+            // ...and it ends when the server says so.
+            remote.emitGameEnded(RemoteGameEndedEvent(GameResult.IN_PROGRESS, Termination.Aborted))
+
+            assertIs<OrchestratorState.Idle>(orchestrator.state)
+            assertEquals(Termination.Aborted, ui.lastGameSummary?.termination)
+
+            orchestrator.stop()
+        }
 
     // -----------------------------------------------------------------------
     // Error handling during game

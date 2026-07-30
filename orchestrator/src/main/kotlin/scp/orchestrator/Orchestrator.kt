@@ -123,9 +123,7 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.AbortRequested -> {
-                    gameController.abort(session!!.gameId)
-                    if (session?.mode == GameMode.REMOTE) session?.remote?.disconnect()
-                    endGame(result = GameResult.IN_PROGRESS, termination = Termination.Aborted)
+                    handleAbort()
                     return
                 }
                 is OrchestratorEvent.DrawRequested -> {
