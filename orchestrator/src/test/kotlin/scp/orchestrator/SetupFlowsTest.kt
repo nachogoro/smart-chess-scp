@@ -482,7 +482,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
-        ui.selectEngineResponse = Result.Success("FakeEngine")
+        ui.selectEngineResponse = Result.Success("0")
         ui.configureEngineGameResponse = Result.Success(
             EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
         )
@@ -493,6 +493,48 @@ class SetupFlowsTest {
 
         orchestrator.stop()
     }
+
+    @Test
+    fun `engines sharing a name are still told apart`() = runTest(UnconfinedTestDispatcher()) {
+        // Two builds of the same engine, or the same engine reached twice. Selecting by name
+        // always picked the first, whichever the player chose.
+        val engine2 = FakeEngineModule()
+        engine2.capabilities = engine.capabilities
+        val orchestrator = createOrchestrator(engines = listOf(engine, engine2))
+        launchOrchestrator(orchestrator)
+
+        ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
+        ui.selectEngineResponse = Result.Success("1")
+        ui.configureEngineGameResponse = Result.Success(
+            EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)
+        )
+        ui.emitNewGameRequested()
+
+        assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
+        assertTrue(engine2.newGameCalled, "the second engine was the one chosen")
+        assertFalse(engine.newGameCalled)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a selection that matches no engine is reported rather than dropped`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // This used to resolve to index -1 and abandon the setup with nothing on screen.
+            val engine2 = FakeEngineModule()
+            engine2.capabilities = EngineCapabilities("Engine2", "Test2", emptyList())
+            val orchestrator = createOrchestrator(engines = listOf(engine, engine2))
+            launchOrchestrator(orchestrator)
+
+            ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
+            ui.selectEngineResponse = Result.Success("nonsense")
+            ui.emitNewGameRequested()
+
+            assertIs<OrchestratorState.Idle>(orchestrator.state)
+            assertIs<UIMessage.UnexpectedFailure>(ui.lastError)
+
+            orchestrator.stop()
+        }
 
     @Test
     fun `single remote auto-selected without UI prompt`() = runTest(UnconfinedTestDispatcher()) {
@@ -522,7 +564,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
-        ui.selectRemotePlatformResponse = Result.Success("FakePlatform")
+        ui.selectRemotePlatformResponse = Result.Success("0")
         ui.emitNewGameRequested()
 
         assertIs<OrchestratorState.SeekingGame>(orchestrator.state)

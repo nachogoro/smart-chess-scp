@@ -42,9 +42,17 @@ interface UIModule {
  */
 data class DrawOffer(val name: String? = null, val color: Color? = null)
 
-data class EngineInfo(val name: String, val author: String)
+/**
+ * An engine offered for selection.
+ *
+ * [id] is what [UIModule.selectEngine] answers with. A name cannot do that job: two adapters may
+ * report the same one, and neither the UI nor the orchestrator would be able to say which was
+ * meant.
+ */
+data class EngineInfo(val id: String, val name: String, val author: String)
 
-data class PlatformInfo(val platform: String, val features: List<String>)
+/** A platform offered for selection. [id] identifies it; see [EngineInfo.id]. */
+data class PlatformInfo(val id: String, val platform: String, val features: List<String>)
 
 data class LocalGameConfig(
     val whiteName: String?,

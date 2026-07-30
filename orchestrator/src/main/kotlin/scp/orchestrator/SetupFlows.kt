@@ -205,24 +205,59 @@ internal suspend fun Orchestrator.setupRemote() {
     }
 }
 
+/**
+ * An adapter's position in the list it was connected in.
+ *
+ * Stable for as long as the orchestrator is, which is as long as a selection needs to mean
+ * anything, and unique in a way a name is not.
+ */
+private fun idOf(index: Int): String = index.toString()
+
 private suspend fun Orchestrator.selectEngine(): EngineAdapterModule? {
     if (engines.isEmpty()) return null
     if (engines.size == 1) return engines.single()
-    val infos = engines.map { eng ->
-        val caps = eng.getCapabilities().getOrNull()
-        EngineInfo(name = caps?.name ?: "Unknown", author = caps?.author ?: "Unknown")
+
+    // Only the ones that can describe themselves. An adapter that will not answer
+    // getCapabilities cannot complete the handshake either, so listing it offers a dead end -
+    // and there is nothing to label it with but a word this module would have to invent.
+    val described = engines.withIndex().mapNotNull { (index, engine) ->
+        engine.getCapabilities().getOrNull()?.let { caps ->
+            EngineInfo(id = idOf(index), name = caps.name, author = caps.author)
+        }
     }
-    val selected = ui.selectEngine(infos).getOrNull() ?: return null
-    return engines.getOrNull(infos.indexOfFirst { it.name == selected })
+    if (described.isEmpty()) {
+        ui.displayError(UIMessage.EngineCapabilitiesUnavailable)
+        return null
+    }
+    described.singleOrNull()?.let { return engines[it.id.toInt()] }
+
+    val selected = ui.selectEngine(described).getOrNull() ?: return null
+    val chosen = described.firstOrNull { it.id == selected }
+        ?: return null.also {
+            ui.displayError(UIMessage.UnexpectedFailure("no engine was offered under id '$selected'"))
+        }
+    return engines[chosen.id.toInt()]
 }
 
 private suspend fun Orchestrator.selectRemote(): RemoteAdapterModule? {
     if (remotes.isEmpty()) return null
     if (remotes.size == 1) return remotes.single()
-    val infos = remotes.map { rem ->
-        val caps = rem.getCapabilities().getOrNull()
-        PlatformInfo(platform = caps?.platform ?: "Unknown", features = caps?.features ?: emptyList())
+
+    val described = remotes.withIndex().mapNotNull { (index, remote) ->
+        remote.getCapabilities().getOrNull()?.let { caps ->
+            PlatformInfo(id = idOf(index), platform = caps.platform, features = caps.features)
+        }
     }
-    val selected = ui.selectRemotePlatform(infos).getOrNull() ?: return null
-    return remotes.getOrNull(infos.indexOfFirst { it.platform == selected })
+    if (described.isEmpty()) {
+        ui.displayError(UIMessage.RemoteCapabilitiesUnavailable)
+        return null
+    }
+    described.singleOrNull()?.let { return remotes[it.id.toInt()] }
+
+    val selected = ui.selectRemotePlatform(described).getOrNull() ?: return null
+    val chosen = described.firstOrNull { it.id == selected }
+        ?: return null.also {
+            ui.displayError(UIMessage.UnexpectedFailure("no platform was offered under id '$selected'"))
+        }
+    return remotes[chosen.id.toInt()]
 }
