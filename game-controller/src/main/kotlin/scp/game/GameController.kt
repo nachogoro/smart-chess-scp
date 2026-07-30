@@ -104,10 +104,10 @@ class GameController(
         if (game.isOver) return Result.Failure(GameError.GameOver())
 
         // The flag may have fallen while this move was being made. The timer that reports it is a
-        // coroutine, and nothing guarantees it resumed before the move arrived - so the clock
-        // decides, not whether a timer happened to fire first. Without this a player whose time
-        // had run out could keep moving indefinitely, because each move cancels and re-arms the
-        // timer and a clock already at zero never arms one at all.
+        // coroutine, and nothing guarantees it resumed before the move arrived, so the clock
+        // decides rather than whether a timer happened to fire first. Without this a player whose
+        // time had run out could keep moving indefinitely, because each move cancels and re-arms
+        // the timer and a clock already at zero never arms one at all.
         flagFallBeforeMove(game)?.let { flagged ->
             pending += FlagFallEvent(gameId = game.id, color = flagged)
             pending += endOnTime(game, flagged)
@@ -147,11 +147,11 @@ class GameController(
         game.chessGame = gameAfterMove
         game.clocks = newClocks
 
-        // A move answers a draw offer by ignoring it - but only a move that was actually played.
-        // Withdrawing the offer up front meant a move the rules engine went on to refuse, which
-        // here means any misread of the physical board, silently took the opponent's offer with
-        // it. The status is set from the new position just below, so clearing who offered is all
-        // that is left to do.
+        // A move answers a draw offer by ignoring it, but only a move that was actually played.
+        // Clearing it any earlier would let a move the rules engine goes on to refuse, which here
+        // means any misread of the physical board, take the opponent's offer down with it. The
+        // status is set from the new position just below, so clearing who offered is all that is
+        // left to do.
         game.drawOffer = null
 
         // Determine new status
@@ -255,10 +255,10 @@ class GameController(
             return Result.Failure(GameError.NoDrawOffer())
         }
 
-        // A draw takes two players. This call used to carry no colour at all, so nothing here
-        // could tell agreement from a player answering their own offer - and in a remote game,
-        // where the offer is left standing while the server is asked, a second tap of Draw did
-        // exactly that and ended the game.
+        // A draw takes two players, so the answer names who is giving it: without a colour here,
+        // agreement cannot be told from a player answering their own offer. It matters most in a
+        // remote game, where the offer is left standing while the server is asked, so a second tap
+        // of Draw would otherwise fall into the accept branch and end the player's own game.
         if (game.drawOffer == color) {
             return Result.Failure(GameError.OwnDrawOffer())
         }
@@ -426,8 +426,8 @@ class GameController(
     /**
      * The rule the library drew a game under, as a cause.
      *
-     * Siblings of checkmate and resignation rather than variants of a `DRAWN` umbrella: each of
-     * these is a reason a game stopped, and that the game was drawn is already in its result.
+     * Each of these is a reason a game stopped, a sibling of checkmate and resignation. That the
+     * game was drawn is already in its result, so these name only the rule.
      */
     private fun terminationForDraw(reason: DrawReason?): Termination = when (reason) {
         DrawReason.STALEMATE -> Termination.Stalemate
@@ -447,7 +447,7 @@ class GameController(
      * The colour whose clock has already run out, if the side to move has no time left.
      *
      * Only meaningful under [Authority.LOCAL] with a time control: in `external` mode the remote
-     * server is the timekeeper and this controller must not decide a game on time (§4.2).
+     * server is the timekeeper and this controller must not decide a game on time.
      */
     private fun flagFallBeforeMove(game: InternalGame): Color? {
         if (game.authority != Authority.LOCAL) return null
@@ -468,7 +468,7 @@ class GameController(
      *
      * FIDE 6.9: the player whose flag fell loses, unless their opponent cannot checkmate with the
      * material left, in which case the game is drawn. `drawClaimReason` is evaluated for the side
-     * to move - which at a flag fall is the flagged player - so `OpponentInsufficientMaterial`
+     * to move, which at a flag fall is the flagged player, so `OpponentInsufficientMaterial`
      * answers exactly that question.
      */
     private fun endOnTime(game: InternalGame, color: Color): GameEndedEvent {

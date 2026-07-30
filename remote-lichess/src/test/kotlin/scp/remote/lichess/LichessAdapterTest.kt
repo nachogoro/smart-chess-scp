@@ -193,7 +193,7 @@ class LichessAdapterTest {
         assertIs<Result.Failure<RemoteError>>(result)
         val error = assertIs<RemoteError.InvalidParams>(result.error)
         // The field, not a sentence about it: the UI points at what the player filled in, and
-        // words the constraint from the descriptor's own minimum (PROTOCOL.md 2.6, 7.2).
+        // words the constraint from the descriptor's own minimum.
         assertEquals("time", error.parameter)
 
         adapter.disconnect()
@@ -407,7 +407,7 @@ class LichessAdapterTest {
     @Test
     fun `several moves arriving at once are all delivered, in order`() = runTest {
         // What a reconnection looks like: one gameState carrying everything played while away.
-        // Emitting only the last of them left the game controller a move list with holes in it.
+        // Emitting only the last of them hands the game controller a move list with holes in it.
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
         configureAndSeek(api, adapter)
@@ -446,7 +446,7 @@ class LichessAdapterTest {
 
         api.eventStreamChannel.send(gameStartEvent())
         advanceUntilIdle()
-        // A position with BLACK to move, so the first move in the list is black's - and we are
+        // A position with BLACK to move, so the first move in the list is black's, and we are
         // white, which makes it the opponent's.
         api.gameStreamChannel.send(
             gameFull(initialFen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
@@ -478,7 +478,7 @@ class LichessAdapterTest {
         api.gameStreamChannel.send(gameFull())
         advanceUntilIdle()
 
-        // We (white) send a move — gameState arrives with our move
+        // We (white) send a move, and gameState arrives with our move
         adapter.sendMove("e2e4")
         api.gameStreamChannel.send(gameState(moves = "e2e4"))
         advanceUntilIdle()
@@ -692,8 +692,8 @@ class LichessAdapterTest {
 
         val error = assertIs<RemoteError.PlatformError>(assertIs<Result.Failure<RemoteError>>(result).error)
         assertEquals(400, error.statusCode)
-        // Lichess's own words, unwrapped from the JSON they arrived in - the one thing 2.6 lets
-        // a UI show as it stands.
+        // Lichess's own words, unwrapped from the JSON they arrived in: the one thing the
+        // protocol lets a UI show as it stands.
         assertEquals("Not your turn", error.serverText)
 
         adapter.disconnect()
@@ -748,7 +748,7 @@ class LichessAdapterTest {
 
     @Test
     fun `moves played while the connection was down arrive on reconnect`() = runTest {
-        // PROTOCOL.md 7.5: moves that happened during a disconnection must be applied. Nothing
+        // The protocol requires that moves made during a disconnection be applied. Nothing
         // reopened a dropped stream at all before, so a blip mid-game meant the board stopped
         // hearing about the game for good.
         val api = FakeLichessApi()
@@ -774,7 +774,7 @@ class LichessAdapterTest {
         advanceUntilIdle()
         assertEquals(listOf("e7e5"), moves.map { it.move })
 
-        // Drop the connection, and have a fresh stream ready for the reconnect to open - as a
+        // Drop the connection, and have a fresh stream ready for the reconnect to open, as a
         // real one gets a new response rather than the one that just failed.
         val reconnected = Channel<String>(Channel.UNLIMITED)
         api.gameStreamChannel.close(java.io.IOException("connection reset"))

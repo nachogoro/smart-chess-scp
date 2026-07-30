@@ -1,4 +1,4 @@
-# Simple Chess Protocol — Kotlin implementation
+# Simple Chess Protocol: Kotlin implementation
 
 A Kotlin/JVM implementation of the [Simple Chess Protocol](https://github.com/nachogoro/smart-chess-protocol).
 The protocol specification (`PROTOCOL.md`) lives in that separate repository; this repo is one
@@ -23,15 +23,15 @@ still `scp.protocol`.
 
 Client applications supply their own `BoardModule` and `UIModule` and reuse the rest unchanged:
 
-- [`smart-chess-desktop`](https://github.com/nachogoro/smart-chess-desktop) — Compose desktop demo.
-- [`smart-chess-android`](https://github.com/nachogoro/smart-chess-android) — Android app for the physical board.
+- [`smart-chess-desktop`](https://github.com/nachogoro/smart-chess-desktop): Compose desktop demo.
+- [`smart-chess-android`](https://github.com/nachogoro/smart-chess-android): Android app for the physical board.
 
 Both consume these modules as a Gradle **composite build**, so edits here are picked up without
 publishing.
 
 ## Building
 
-This repository builds on its own — the native rules library is reached through
+This repository builds on its own. The native rules library is reached through
 `io.github.nachogoro:simplechess`, resolved from Maven Central, so no sibling checkouts are needed:
 
 ```sh

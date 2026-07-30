@@ -228,7 +228,7 @@ private suspend fun Orchestrator.selectEngine(): EngineAdapterModule? {
     if (engines.size == 1) return engines.single()
 
     // Only the ones that can describe themselves. An adapter that will not answer
-    // getCapabilities cannot complete the handshake either, so listing it offers a dead end -
+    // getCapabilities cannot complete the handshake either, so listing it offers a dead end,
     // and there is nothing to label it with but a word this module would have to invent.
     val described = engines.withIndex().mapNotNull { (index, engine) ->
         engine.getCapabilities().getOrNull()?.let { caps ->

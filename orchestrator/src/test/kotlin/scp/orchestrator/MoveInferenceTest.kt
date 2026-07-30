@@ -104,7 +104,7 @@ class MoveInferenceTest {
     // Capture
     // -----------------------------------------------------------------------
 
-    // Italian Game — white bishop captures on f7
+    // Italian Game: white bishop captures on f7
     private val captureFen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4"
 
     @Test
@@ -184,7 +184,7 @@ class MoveInferenceTest {
     @Test
     fun `board two moves ahead returns NoMatch`() {
         // Two plies on from the position being played, so it is neither unchanged nor reachable by
-        // any single legal move - the case that genuinely means the board and the game disagree.
+        // any single legal move: the case that genuinely means the board and the game disagree.
         val twoMovesOn = fenAfterMove(fenAfterMove(startFen, "e2e4"), "e7e5")
         val boardState = boardStateFromFen(twoMovesOn, BoardCapabilityLevel.COLOR)
         val result = inferMove(startFen, boardState, BoardCapabilityLevel.COLOR)

@@ -12,8 +12,8 @@ class InternalGame(
 ) {
     var status: GameStatus = GameStatus.NOT_STARTED
     var result: GameResult = GameResult.IN_PROGRESS
-    // A `none` time control is the absence of one, so there are no clocks to track (PROTOCOL.md
-    // §4.2). Building a pair of them anyway left every untimed game reporting a frozen 00:00.
+    // A `none` time control is the absence of one, so there are no clocks to track. Building a
+    // pair of them anyway would leave every untimed game reporting a frozen 00:00.
     var clocks: Clocks? = timeControl
         ?.takeIf { it.type != TimeControlType.NONE }
         ?.let { Clocks(it.initialMs, it.initialMs) }

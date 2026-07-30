@@ -157,7 +157,7 @@ class FakeUIModule : UIModule {
     override val drawRequested: SharedFlow<DrawRequestedEvent> = _drawRequested
     override val abortRequested: SharedFlow<AbortRequestedEvent> = _abortRequested
 
-    // Configurable responses — use the list variants to return different values on retries.
+    // Configurable responses: use the list variants to return different values on retries.
     // When a list is set, responses are popped from the front; when empty, Cancelled is returned.
     var selectGameModeResponse: Result<UIError, GameMode> = Result.Success(GameMode.LOCAL)
     var configureLocalGameResponse: Result<UIError, LocalGameConfig> = Result.Success(

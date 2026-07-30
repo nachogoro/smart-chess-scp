@@ -8,7 +8,7 @@ class LichessStreamParserTest {
     fun `parse gameFull event`() {
         // A real payload, ratings and all. Lichess sends them; this system has no use for one, so
         // the models do not ask and ignoreUnknownKeys drops them. Keeping them in the fixture is
-        // the point - it is what shows a field we do not want cannot break the parse.
+        // the point: it is what shows a field we do not want cannot break the parse.
         val line = """{"type":"gameFull","id":"abc123","rated":true,"variant":{"key":"standard","name":"Standard"},"speed":"rapid","white":{"id":"alice","name":"Alice","rating":1500},"black":{"id":"bob","name":"Bob","rating":1400},"initialFen":"startpos","state":{"type":"gameState","moves":"","wtime":900000,"btime":900000,"winc":10000,"binc":10000,"status":"started"},"clock":{"initial":900000,"increment":10000}}"""
 
         val event = parseGameStreamLine(line)

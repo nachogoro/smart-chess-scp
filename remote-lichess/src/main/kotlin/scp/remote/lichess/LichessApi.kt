@@ -106,7 +106,7 @@ interface LichessApi {
      * Challenges the Lichess Stockfish AI.
      *
      * Calls `POST /api/challenge/ai`. Unlike [createSeek] and [createChallenge],
-     * this is a one-shot call — the game starts immediately, and the game start
+     * this is a one-shot call: the game starts immediately, and the game start
      * notification arrives via the event stream.
      *
      * @param level Stockfish level (1–8).

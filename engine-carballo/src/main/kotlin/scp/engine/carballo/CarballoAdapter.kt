@@ -29,16 +29,16 @@ private fun debugLog(msg: String) = scp.protocol.debugLog("[carballo] $msg")
  * [withContext] so that the calling coroutine is not blocked.
  *
  * Configurable parameters:
- * - **UCI_LimitStrength** — Enable strength limiting.
- * - **UCI_Elo** — Target Elo (500–2100) when strength is limited.
- * - **Hash** — Transposition table size in MB (1–256).
- * - **UseBook** — Whether to use the built-in opening book.
+ * - **UCI_LimitStrength**: enable strength limiting.
+ * - **UCI_Elo**: target Elo (500-2100) when strength is limited.
+ * - **Hash**: transposition table size in MB (1-256).
+ * - **UseBook**: whether to use the built-in opening book.
  */
 class CarballoAdapter : EngineAdapterModule {
 
     // Buffered so that announcing a failure never parks the search path waiting for a collector.
     // Emission uses emit rather than tryEmit: tryEmit cannot suspend, so on an unbuffered flow it
-    // drops the value and reports it in a return nobody was checking - engine.error never arrived.
+    // drops the value and reports that only through a return value, which is easily ignored.
     private val _errors = MutableSharedFlow<EngineError>(extraBufferCapacity = ERROR_BUFFER)
     override val errors: SharedFlow<EngineError> = _errors
 

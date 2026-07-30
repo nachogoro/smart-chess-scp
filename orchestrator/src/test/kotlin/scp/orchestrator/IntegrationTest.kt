@@ -18,10 +18,9 @@ import kotlin.test.*
  * The orchestrator driven against the real game controller.
  *
  * Everything else here tests the orchestrator against [FakeGameControllerModule], which is fine
- * for the routing decisions but says nothing about whether the two agree. They did not: a
- * checkmate reached the UI as an unnamed ending, a clock could be topped up past its own flag,
- * and a refused move withdrew the opponent's draw offer - and all three passed a full suite,
- * because every controller the orchestrator was ever tested against was one written to satisfy it.
+ * for the routing decisions but says nothing about whether the two agree. A fake written to
+ * satisfy the caller agrees with it by construction, so the bugs that live in the seam between
+ * the two modules can only be caught by running them against each other.
  *
  * These start where a player starts, from the opening position and a board, and check what a UI
  * would actually be told.
@@ -183,7 +182,7 @@ class IntegrationTest {
         f.playFromBoard("e2e4")
 
         // Black is to move, but white is the one resigning. Whose request it is belongs to the
-        // UI: a local game is two people at one board, and inferring it from the turn resigned
+        // UI: a local game is two people at one board, so inferring it from the turn would resign
         // the wrong player whenever the other one had asked.
         f.ui.emitResignRequested(f.gameId, Color.WHITE)
 
@@ -279,7 +278,7 @@ class IntegrationTest {
         val summary = assertNotNull(f.ui.lastGameSummary)
         assertEquals(Termination.Timeout, summary.termination)
         assertEquals(GameResult.BLACK_WINS, summary.result)
-        // The increment used to be added to the overrun: 10000 - 15000 + 30000 = 25000.
+        // Adding the increment to the overrun would give 10000 - 15000 + 30000 = 25000.
         val state = assertIs<Result.Success<GameState>>(f.controller.getState(gameId))
         assertEquals(0, state.value.clocks?.whiteMs)
 
@@ -338,7 +337,7 @@ class IntegrationTest {
             f.ui.emitDrawRequested(f.gameId)
 
             // White is to move, so the offer is white's and black is the one being asked. A
-            // controller that could not say whose it was let the offerer accept it themselves.
+            // controller that cannot say whose it is lets the offerer accept it themselves.
             assertEquals(Color.WHITE, offerWhilePrompting)
 
             f.orchestrator.stop()
@@ -370,8 +369,8 @@ class IntegrationTest {
 
     @Test
     fun `an opponent move says which colour played it`() = runTest(UnconfinedTestDispatcher()) {
-        // ui.showOpponentMove carries the colour (PROTOCOL.md 4.6). It has to be read before the
-        // move is applied - afterwards the turn has passed back and nothing says whose it was.
+        // ui.showOpponentMove carries the colour. It has to be read before the
+        // move is applied: afterwards the turn has passed back and nothing says whose it was.
         val engine = FirstLegalMoveEngine()
         val f = startGame(mode = GameMode.ENGINE, engines = listOf(engine), playerColor = Color.WHITE)
 
@@ -384,8 +383,8 @@ class IntegrationTest {
 
     @Test
     fun `an engine game names both sides of the board`() = runTest(UnconfinedTestDispatcher()) {
-        // ui.configureEngineGame returns the player's name, so the game has one for each side
-        // rather than the two nulls it used to be created with.
+        // ui.configureEngineGame returns the player's name, so an engine game names both sides of
+        // the board rather than neither.
         val engine = FirstLegalMoveEngine()
         val f = startGame(mode = GameMode.ENGINE, engines = listOf(engine), playerColor = Color.BLACK)
 
@@ -408,7 +407,7 @@ class IntegrationTest {
         f.playFromBoard("g2g4")
         f.driver.play(assertNotNull(f.ui.lastOpponentMove).move)
 
-        // Not mate - the engine did not cooperate - but the game is still going and consistent.
+        // Not mate, since the engine did not cooperate, but the game is still going and consistent.
         val state = assertIs<Result.Success<GameState>>(f.controller.getState(f.gameId))
         assertEquals(GameStatus.IN_PROGRESS, state.value.status)
         assertEquals(4, state.value.moves.size)

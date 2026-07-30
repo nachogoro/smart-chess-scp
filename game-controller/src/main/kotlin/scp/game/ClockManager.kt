@@ -21,8 +21,8 @@ fun computeClockAfterMove(
     val afterElapsed = (remaining - elapsedMs).coerceAtLeast(0)
 
     // An exhausted clock is not topped up. The increment pays for a move made in time, so adding
-    // it to a clock that already ran out handed the player their overrun back and then some - on
-    // a 1s + 5s control, thinking for 3s used to *end* the move 3s better off than it started.
+    // it to a clock that already ran out would hand the player their overrun back and then some:
+    // on a 1s + 5s control, thinking for 3s would end the move 3s better off than it started.
     val afterIncrement = if (afterElapsed == 0L) {
         0L
     } else when (timeControl.type) {

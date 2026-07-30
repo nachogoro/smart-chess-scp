@@ -20,8 +20,8 @@ sealed class InferenceOutcome {
     /**
      * The board still shows the position that was already on it.
      *
-     * Kept apart from [NoMatch] because it has an ordinary cause - the player signalled before
-     * actually moving a piece - and telling them that is far more useful than reporting the board
+     * Kept apart from [NoMatch] because it has an ordinary cause, the player signalling before
+     * actually moving a piece, and telling them that is far more useful than reporting the board
      * as being in a state no legal move explains.
      */
     data object Unchanged : InferenceOutcome()

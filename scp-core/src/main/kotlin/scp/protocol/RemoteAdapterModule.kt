@@ -15,7 +15,7 @@ interface RemoteAdapterModule {
      *
      * Distinct from [resign]: platforms allow it only before a game is properly under way, and it
      * ends in no result rather than a loss. Like every other way a remote game can end, the
-     * outcome arrives on [gameEnded] rather than from this call (PROTOCOL.md §6.3).
+     * outcome arrives on [gameEnded] rather than from this call.
      */
     suspend fun abort(): Result<RemoteError, Unit>
     suspend fun offerDraw(): Result<RemoteError, Unit>
@@ -29,10 +29,9 @@ interface RemoteAdapterModule {
     /**
      * Failures the platform or the connection to it reports of its own accord.
      *
-     * Carries the error itself: a PLATFORM_ERROR keeps the status code and the platform's own
-     * words, which is the one text §2.6 lets a UI show as it stands, and INVALID_PARAMS keeps the
-     * field it was about. Flattened to a code and a diagnostic, none of that survived, and the
-     * diagnostic is the one thing a UI must not display.
+     * Carries the error itself, so an asynchronous failure says as much as a refused call does: a
+     * PLATFORM_ERROR keeps the status code and the platform's own words, which is the one text
+     * the protocol lets a UI show as it stands, and INVALID_PARAMS keeps the field it was about.
      */
     val errors: SharedFlow<RemoteError>
 }
@@ -89,7 +88,8 @@ sealed class RemoteError(
     /**
      * An operational request arrived before the configuration handshake completed.
      *
-     * Named for the handshake rather than the connection because that is what §5 requires be
+     * Named for the handshake rather than the connection because that is what the protocol
+     * requires be
      * reported, and what a caller has to do about it: configure, not reconnect.
      */
     class NotConfigured : RemoteError("NOT_CONFIGURED")
@@ -100,9 +100,10 @@ sealed class RemoteError(
     /**
      * The platform answered, and its answer was no.
      *
-     * [serverText] is the platform's own words. It is the one kind of text §2.6 lets a UI show as
-     * it stands, because we neither own that vocabulary nor can enumerate it - so it is a field of
-     * its own rather than a [diagnostic], which a UI must not display.
+     * [serverText] is the platform's own words. It is the one kind of text the protocol lets a UI
+     * show as
+     * it stands, because we neither own that vocabulary nor can enumerate it. It gets a field of
+     * its own rather than riding in [diagnostic], which a UI must not display.
      */
     class PlatformError(
         val statusCode: Int? = null,
@@ -121,7 +122,7 @@ sealed class RemoteError(
      * The connection carrying the game was lost.
      *
      * Its own code because the game is still live on the platform and may be resumable, which is
-     * not true of the others (PROTOCOL.md §7.5).
+     * not true of the others.
      */
     class ConnectionLost(diagnostic: String? = null) : RemoteError("CONNECTION_LOST", diagnostic)
 }

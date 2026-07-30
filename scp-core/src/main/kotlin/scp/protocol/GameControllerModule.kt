@@ -60,7 +60,7 @@ data class SubmitMoveResult(
     /**
      * Whether the move was an en passant capture.
      *
-     * Not derivable from [san] and [fen] alone - `exd6` looks the same either way - and a UI
+     * Not derivable from [san] and [fen] alone, since `exd6` looks the same either way, and a UI
      * driving a physical board needs it, because the captured pawn stands on a square the move
      * never names.
      */
@@ -95,7 +95,7 @@ sealed class GameError(
      * A position could not be read.
      *
      * Its own code rather than [IllegalMove]: setting a game up from a malformed FEN is not a move
-     * at all, and reporting it as one left a UI unable to tell the two apart.
+     * at all, and reporting it as one would leave a UI unable to tell the two apart.
      */
     class InvalidFen(val fen: String? = null) : GameError("INVALID_FEN")
 

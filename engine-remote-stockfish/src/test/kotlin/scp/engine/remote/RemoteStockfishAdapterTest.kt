@@ -331,9 +331,9 @@ class RemoteStockfishAdapterTest {
 
     @Test
     fun `a failed request reaches a subscribed collector`() = runTest {
-        // The flow used to be a rendezvous one emitted into with tryEmit, which reports failure
-        // rather than suspending - so the event was dropped unless the collector happened to be
-        // parked in collect at that instant, and engine.error never arrived at all.
+        // The event reaches a collector that subscribed before the failure. On a rendezvous flow
+        // emitted into with tryEmit it would only arrive if the collector happened to be parked
+        // in collect at that instant, since tryEmit reports failure rather than suspending.
         val unreachable = RemoteStockfishAdapter(apiUrl = "http://127.0.0.1:1/v1")
         val seen = mutableListOf<EngineError>()
         val collector = launch { unreachable.errors.collect { seen += it } }

@@ -520,7 +520,7 @@ class SetupFlowsTest {
     @Test
     fun `a selection that matches no engine is reported rather than dropped`() =
         runTest(UnconfinedTestDispatcher()) {
-            // This used to resolve to index -1 and abandon the setup with nothing on screen.
+            // Matching by name would resolve to index -1 and abandon the setup silently.
             val engine2 = FakeEngineModule()
             engine2.capabilities = EngineCapabilities("Engine2", "Test2", emptyList())
             val orchestrator = createOrchestrator(engines = listOf(engine, engine2))

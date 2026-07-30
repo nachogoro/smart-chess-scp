@@ -47,7 +47,7 @@ class CarballoAdapterTest {
     @Test
     fun `configure with empty settings uses defaults`() = runTest {
         val adapter = configuredAdapter()
-        // Should not crash — engine is usable with defaults
+        // Should not crash: engine is usable with defaults
         val result = adapter.getBestMove(GetBestMoveParams(
             fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             maxDepth = 1,
@@ -158,9 +158,9 @@ class CarballoAdapterTest {
     @Test
     fun `depth and time bound the search together`() = runTest(timeout = 30.seconds) {
         // They are independent ceilings, and the search stops at whichever it reaches first.
-        // Treating them as alternatives, and preferring depth, meant that a caller naming both -
-        // which is what a clock-derived budget with a depth cap looks like - had its time budget
-        // quietly dropped and could think for as long as the depth took.
+        // Treating them as alternatives and preferring depth would silently drop the time budget
+        // of a caller naming both, which is what a clock-derived budget with a depth cap looks
+        // like, letting the search think for as long as the depth takes.
         val adapter = configuredAdapter()
         val started = System.nanoTime()
         val result = adapter.getBestMove(GetBestMoveParams(
@@ -193,7 +193,7 @@ class CarballoAdapterTest {
     @Test
     fun `getBestMove searches the position given by FEN`() = runTest(timeout = 30.seconds) {
         val adapter = configuredAdapter()
-        // Position after 1. e4 — black to move
+        // Position after 1. e4, black to move
         val result = adapter.getBestMove(GetBestMoveParams(
             fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
             maxDepth = 3,

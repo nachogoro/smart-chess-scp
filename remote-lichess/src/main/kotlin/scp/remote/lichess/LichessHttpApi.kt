@@ -223,7 +223,7 @@ class LichessHttpApi(
                     val line = try {
                         source.readUtf8Line()
                     } catch (_: IOException) {
-                        // Call cancelled or connection dropped — end the stream.
+                        // Call cancelled or connection dropped, so end the stream.
                         break
                     } ?: break
                     if (line.isNotBlank()) emit(line)
@@ -239,8 +239,8 @@ class LichessHttpApi(
  * Thrown when the Lichess API returns a non-2xx response.
  *
  * [body] is the response body exactly as the platform sent it, and nothing else: the adapter
- * hands it on as the platform's own words, which §2.6 lets a UI show as they stand. Anything
- * composed here would be this module's words wearing Lichess's name.
+ * hands it on as the platform's own words, which the protocol lets a UI show as they stand.
+ * Anything composed here would be this module's words wearing Lichess's name.
  */
 class LichessApiException(val statusCode: Int, val body: String) : Exception(
     "HTTP $statusCode from Lichess: $body",

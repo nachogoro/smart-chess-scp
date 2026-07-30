@@ -122,8 +122,8 @@ class GameLifecycleTest {
     @Test
     fun `a mating move is reported to the UI as checkmate`() = runTest(UnconfinedTestDispatcher()) {
         // The controller's game.ended is queued while the orchestrator is still handling the move
-        // that caused it. Ending the game from transitionToAwaitingMove as well used to win that
-        // race and report Termination.Other, losing how every local game finished.
+        // that caused it. Ending the game from transitionToAwaitingMove as well would win that
+        // race and report Termination.Other, losing how the game actually finished.
         gc = MatingGameController()
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
@@ -166,7 +166,7 @@ class GameLifecycleTest {
     fun `an action aimed at a finished game does not act on the current one`() =
         runTest(UnconfinedTestDispatcher()) {
             // A UI can queue a tap that outlives the game it was made in: resign pressed as one
-            // game ends, delivered after the next has started. It used to end the new game.
+            // game ends, delivered after the next has started. It must not end the new game.
             val orchestrator = startLocalGame()
             val first = orchestrator.session!!.gameId
 
@@ -192,8 +192,8 @@ class GameLifecycleTest {
 
     @Test
     fun `a flag fall says who won on time`() = runTest(UnconfinedTestDispatcher()) {
-        // The result used to be left at its default of "*", so a UI could say the game ended on
-        // time and never who by. Whose clock ran out settles it.
+        // Whose clock ran out settles who won, so the result carries it. Left at its default of
+        // "*", a UI could say the game ended on time and never who by.
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
@@ -209,7 +209,7 @@ class GameLifecycleTest {
     @Test
     fun `a controller that ends the game itself is left to report it`() =
         runTest(UnconfinedTestDispatcher()) {
-            // PROTOCOL.md 6.3 allows either. Where the controller ends the game, game.ended is
+            // The protocol allows either. Where the controller ends the game, game.ended is
             // already on its way with the result and the termination, and ending it here as well
             // would win that race and report whatever this end of it happened to assume.
             val endedItself = object : FakeGameControllerModule() {
@@ -309,7 +309,7 @@ class GameLifecycleTest {
             ui.emitAbortRequested(gameId)
 
             assertTrue(remote.abortCalled)
-            // The server is the authority on how a remote game ends (PROTOCOL.md 6.3), so the
+            // The server is the authority on how a remote game ends, so the
             // game stays live until it says otherwise. Ending it here would commit to an outcome
             // the server might refuse, with no way back.
             assertNull(gc.lastAbort)
@@ -339,9 +339,9 @@ class GameLifecycleTest {
 
         val failed = assertIs<UIMessage.BoardFailed>(ui.lastError)
         assertEquals("SENSOR_FAILURE", failed.error.code)
-        // The squares survive the trip to the UI. Flattened to a code and a diagnostic - which
-        // 2.6 forbids displaying - the only honest thing a UI could say was that something went
-        // wrong, when it could have said which pieces to re-seat.
+        // The squares survive the trip to the UI, which is what lets it name the pieces to
+        // re-seat. A bare code would leave "something went wrong" as the only honest thing to
+        // say, since the protocol forbids displaying the diagnostic.
         assertEquals(
             listOf("e4", "d5"),
             assertIs<BoardError.SensorFailure>(failed.error).unreadableSquares,

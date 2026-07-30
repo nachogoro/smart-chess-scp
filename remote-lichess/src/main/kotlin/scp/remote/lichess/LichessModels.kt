@@ -36,7 +36,7 @@ data class LichessStreamEvent(
 /**
  * Summary information about a game, as provided by the event stream.
  *
- * This is a lightweight snapshot — full game details are obtained by opening
+ * This is a lightweight snapshot; full game details are obtained by opening
  * a dedicated game stream via `GET /api/board/game/stream/{gameId}`.
  *
  * @property fullId Full game ID including player suffix (used internally by Lichess).

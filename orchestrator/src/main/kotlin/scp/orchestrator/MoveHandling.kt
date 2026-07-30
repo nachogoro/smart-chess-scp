@@ -99,7 +99,8 @@ internal suspend fun Orchestrator.handleEngineMove() {
     val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
     // The engine is handed the game, not just a position: a starting FEN plus the moves played
-    // from it (PROTOCOL.md §4.3). Sending only the current position leaves it unable to see a
+    // from it, which is the shape the protocol gives the call. Sending only the current position
+    // leaves it unable to see a
     // repetition it is walking into, or one it could claim.
     val startingFen = s.initialFen
     val searchFen = startingFen ?: gameState.fen
@@ -120,7 +121,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
         fen = searchFen,
         moves = history,
         // Untimed games still get a ceiling, so an adapter that would otherwise think until it is
-        // stopped - which nothing here ever does - cannot hang the game.
+        // stopped (which nothing here ever does) cannot hang the game.
         timeMs = thinkMs ?: MAX_THINK_MS,
         maxDepth = if (thinkMs == null) UNTIMED_SEARCH_DEPTH else null,
     ))
@@ -195,8 +196,7 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
  *
  * [color] comes from the UI, which is the only module that knows whose request it was: a local
  * game is two people at one board, and whether Resign belongs to the player to move or to each of
- * them separately is a question about the screen. Inferring it from whose turn it was resigned the
- * wrong player whenever it was the other one who had asked.
+ * them separately is a question about the screen. Whose turn it happens to be does not answer it.
  */
 internal suspend fun Orchestrator.handleResign(color: Color) {
     val s = session ?: return
@@ -205,11 +205,12 @@ internal suspend fun Orchestrator.handleResign(color: Color) {
             gameController.resign(s.gameId, color)
         }
         GameMode.REMOTE -> {
-            // The server is the authority on how a remote game ends (PROTOCOL.md §6.3), so this
+            // The server is the authority on how a remote game ends, so this
             // asks and waits for remote.gameEnded rather than deciding. Resigning locally as well
-            // committed to an outcome the server had not agreed to: if it refused the request -
-            // not your game, already over, lost in transit - the local game was over anyway, and
-            // the setResult that should have relayed the real ending arrived to find it finished.
+            // would commit to an outcome the server has not agreed to: were it to refuse the
+            // request (not your game, already over, lost in transit) the local game would be over
+            // regardless, and the setResult relaying the real ending would find it already
+            // finished.
             val sent = s.remote?.resign()
             if (sent is Result.Failure) {
                 ui.displayError(UIMessage.RemoteFailed(sent.error))
@@ -221,16 +222,17 @@ internal suspend fun Orchestrator.handleResign(color: Color) {
 /**
  * A player's clock has run out.
  *
- * §6.3 lets a game controller either end the game itself or leave the decision here, so this has
+ * The protocol lets a game controller either end the game itself or leave the decision here, so
+ * this has
  * to work for both. Where it ended the game, `game.ended` is already on its way carrying the
  * result, and ending it here as well would win that race and report a timeout with no winner in
- * it - which is what used to happen, so a player was never told who won on time.
+ * it.
  */
 internal suspend fun Orchestrator.handleFlagFell(event: FlagFallEvent) {
     val s = session ?: return
     if (event.gameId != s.gameId) return
 
-    // Under external authority the server is the timekeeper and decides timeouts itself (§4.2).
+    // Under external authority the server is the timekeeper and decides timeouts itself.
     if (s.mode == GameMode.REMOTE) return
 
     if (gameController.getState(s.gameId).getOrNull()?.status?.isFinished == true) return
@@ -250,7 +252,7 @@ internal suspend fun Orchestrator.handleFlagFell(event: FlagFallEvent) {
  * Aborts the game, by whichever route this mode's authority requires.
  *
  * The local game controller announces the ending itself on game.ended, so nothing here ends the
- * session: doing both is what made every locally decided ending arrive as OTHER.
+ * session: doing both would race that event, and the ending invented here would win.
  */
 internal suspend fun Orchestrator.handleAbort() {
     val s = session ?: return
@@ -290,7 +292,7 @@ internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
 
     // 2. If the *opponent* has offered a draw, accept it. Whose offer it is has to be checked:
     //    a remote offer is left standing while the server is asked, so without this a second tap
-    //    of Draw accepted the player's own offer and ended their game for them.
+    //    of Draw would accept the player's own offer and end their game for them.
     val gameState = gameController.getState(gameId).getOrNull()
     val pendingOffer = gameState?.takeIf { it.status == GameStatus.DRAW_OFFERED }?.drawOffer
     if (pendingOffer != null && pendingOffer != asker) {
@@ -334,8 +336,8 @@ internal suspend fun Orchestrator.handleRemoteDrawOffer() {
     s.remote?.respondDraw(accept)
     if (!accept) return
 
-    // Record the opponent's offer before answering it. Nothing local made this offer - it arrived
-    // from the server - so without it the answer is one to an offer the game controller has never
+    // Record the opponent's offer before answering it. Nothing local made this offer, it arrived
+    // from the server, so without this the answer is to an offer the game controller has never
     // heard of, which it rightly refuses.
     gameController.offerDraw(s.gameId, playerColor.opposite())
     gameController.respondDraw(s.gameId, playerColor, true)

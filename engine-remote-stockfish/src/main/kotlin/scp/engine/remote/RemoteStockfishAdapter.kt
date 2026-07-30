@@ -21,7 +21,7 @@ class RemoteStockfishAdapter(
 
     // Buffered so that announcing a failure never parks the request path waiting for a collector.
     // Emission uses emit rather than tryEmit: tryEmit cannot suspend, so on an unbuffered flow it
-    // drops the value and reports it in a return nobody was checking - engine.error never arrived.
+    // drops the value and reports that only through a return value, which is easily ignored.
     private val _errors = MutableSharedFlow<EngineError>(extraBufferCapacity = ERROR_BUFFER)
     override val errors: SharedFlow<EngineError> = _errors
 
@@ -148,7 +148,7 @@ class RemoteStockfishAdapter(
     }
 
     override suspend fun newGame(): Result<EngineError, Unit> {
-        // No state to reset — the remote API is stateless.
+        // No state to reset: the remote API is stateless.
         return Result.Success(Unit)
     }
 

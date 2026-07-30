@@ -27,17 +27,17 @@ import kotlin.io.path.readLines
  * e8 bK
  * ```
  *
- * **First line** — one of `full`, `color`, or `occupancy`.
+ * **First line**: one of `full`, `color`, or `occupancy`.
  *
- * **Subsequent lines** — one per occupied square. Empty squares are not listed.
+ * **Subsequent lines**: one per occupied square. Empty squares are not listed.
  * The format of each line depends on the capability level:
  *
- * - **`full`**: `<square> <color><piece>` — e.g. `e2 wP`, `a8 bR`.
+ * - **`full`**: `<square> <color><piece>`, e.g. `e2 wP`, `a8 bR`.
  *   Color is `w`/`b`. Piece is `P`/`N`/`B`/`R`/`Q`/`K`.
  *
- * - **`color`**: `<square> <color>` — e.g. `e2 w`, `e7 b`.
+ * - **`color`**: `<square> <color>`, e.g. `e2 w`, `e7 b`.
  *
- * - **`occupancy`**: `<square>` — e.g. `e2`, `e7`. Just lists which squares are occupied.
+ * - **`occupancy`**: `<square>`, e.g. `e2`, `e7`. Just lists which squares are occupied.
  *
  * Blank lines and lines starting with `#` are ignored.
  *

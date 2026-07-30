@@ -47,19 +47,19 @@ private fun debugLog(msg: String) = scp.protocol.debugLog("[lichess] $msg")
  *
  * This adapter manages two concurrent NDJSON streams to communicate with Lichess:
  *
- * 1. **Event stream** — Opened once after [configure] and kept alive for the session.
+ * 1. **Event stream**: opened once after [configure] and kept alive for the session.
  *    Receives account-wide notifications such as `gameStart` and `gameFinish`.
  *    When a `gameStart` arrives for a game the adapter is actively seeking (see [seekGame]),
  *    it opens a game stream. Stale `gameStart` events from pre-existing games are ignored.
  *
- * 2. **Game stream** — Opened per game. The first message is a `gameFull` containing the
+ * 2. **Game stream**: opened per game. The first message is a `gameFull` containing the
  *    complete game setup (players, clocks, initial position). Subsequent `gameState` messages
  *    carry the full move list and clock times after each move, as well as draw offers and
  *    terminal statuses. The adapter diffs incoming move lists against [lastKnownMoveCount]
  *    to detect new opponent moves.
  *
  * Game actions (moves, resignation, draw offers) are one-shot POST calls that do not return
- * game state — the response comes asynchronously via the game stream.
+ * game state; the response comes asynchronously via the game stream.
  *
  * Only Rapid and Classical time controls are supported (minimum 10 minutes initial time),
  * as required by the Lichess Board API.
@@ -103,12 +103,12 @@ class LichessAdapter(
     private var gameStreamJob: Job? = null
 
     // These are notifications, not state, so none of them replays. The adapter outlives a single
-    // game while the orchestrator subscribes per game, and a replay buffer handed each new set of
-    // collectors the *previous* game's last event the moment they subscribed: a replayed
-    // gameStarted built the next game from the old game's colour and position, and a replayed
-    // gameEnded finished it before it began. Buffering without replay keeps the stream coroutines
-    // from stalling on a slow collector while guaranteeing a subscriber only ever hears what
-    // happens after it subscribes.
+    // game while the orchestrator subscribes per game, so a replay buffer would hand each new set
+    // of collectors the *previous* game's last event the moment they subscribed: a replayed
+    // gameStarted would build the next game from the old game's colour and position, and a
+    // replayed gameEnded would finish it before it began. Buffering without replay keeps the
+    // stream coroutines from stalling on a slow collector while guaranteeing a subscriber only
+    // ever hears what happens after it subscribes.
     private val _gameStarted = MutableSharedFlow<GameStartedEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val gameStarted: SharedFlow<GameStartedEvent> = _gameStarted
 
@@ -256,8 +256,8 @@ class LichessAdapter(
         val color = (settings[PARAM_COLOR] as? String)?.lowercase() ?: "random"
 
         // Names the field, and only the field. What is wrong with the value is not carried: the
-        // UI rendered it from a descriptor that already declares the minimum, and a sentence
-        // written here would be one this module has no business choosing a language for (§2.6).
+        // UI renders it from a descriptor that already declares the minimum, and a sentence
+        // written here would be one this module has no business choosing a language for.
         if (time < MIN_SEEK_TIME_MINUTES) {
             return Result.Failure(RemoteError.InvalidParams(PARAM_TIME))
         }
@@ -410,8 +410,7 @@ class LichessAdapter(
      * Launches a coroutine that collects the account-wide event stream, reopening it when it drops.
      *
      * Lichess holds this connection open for the session, so losing it means losing every game
-     * start until something opens it again - and nothing did. It is retried until [disconnect]
-     * cancels the job.
+     * start until something opens it again. It is retried until [disconnect] cancels the job.
      */
     private fun startEventStream() {
         val t = token ?: return
@@ -443,12 +442,12 @@ class LichessAdapter(
     /**
      * Processes a single line from the event stream.
      *
-     * On `gameStart`, records the game ID and opens a per-game stream — but only
+     * On `gameStart`, records the game ID and opens a per-game stream, but only
      * if the adapter is actively awaiting a game (i.e. [seekGame] was called).
      * This prevents stale `gameStart` events from previous sessions from being
      * processed.
      *
-     * `gameFinish` is ignored here — game termination is detected from the game stream's
+     * `gameFinish` is ignored here; game termination is detected from the game stream's
      * terminal status instead, which provides richer information (winner, reason).
      */
     private fun handleEventStreamLine(line: String) {
@@ -464,12 +463,12 @@ class LichessAdapter(
                 debugLog("Event: gameStart gameId=${game?.gameId} awaitingGame=$awaitingGame staleIds=$staleGameIds")
                 if (game == null) return
                 if (!awaitingGame) {
-                    // Not seeking — remember this ID so we skip it later
+                    // Not seeking, so remember this ID and skip it later
                     staleGameIds.add(game.gameId)
                     return
                 }
                 if (game.gameId in staleGameIds) {
-                    // This is a stale game replayed after seekGame was called — skip it
+                    // This is a stale game replayed after seekGame was called, so skip it
                     debugLog("Skipping stale game ${game.gameId}")
                     return
                 }
@@ -495,7 +494,7 @@ class LichessAdapter(
      * Reconnecting is also how the game is reconciled. Lichess replays the whole move list in the
      * `gameFull` that opens every stream, and [lastKnownMoveCount] deliberately survives the drop,
      * so the diff in [handleGameState] emits exactly the moves played while the connection was
-     * down - which is what §7.5 asks for, and what a UI needs to catch the board up.
+     * down: what the protocol asks for, and what a UI needs to catch the board up.
      */
     private fun startGameStream(gameId: String) {
         val t = token ?: return
@@ -612,13 +611,13 @@ class LichessAdapter(
      * Handles an incremental `gameState` message from the game stream.
      *
      * Checks for three things in order:
-     * 1. **New moves** — Compares the incoming move count against [lastKnownMoveCount]. If there
+     * 1. **New moves**: compares the incoming move count against [lastKnownMoveCount]. If there
      *    are new moves and the latest one was made by the opponent, emits an [OpponentMoveEvent].
      *    Move detection runs first so that a terminal state (e.g. checkmate) emits the final
      *    opponent move before the game-over notification.
-     * 2. **Terminal status** — If the game has ended (checkmate, resignation, draw, timeout, etc.),
+     * 2. **Terminal status**: if the game has ended (checkmate, resignation, draw, timeout, etc.),
      *    emits a [RemoteGameEndedEvent] and cleans up.
-     * 3. **Draw offers** — If the opponent has a pending draw offer (`bdraw`/`wdraw`), emits
+     * 3. **Draw offers**: if the opponent has a pending draw offer (`bdraw`/`wdraw`), emits
      *    on [drawOffered].
      */
     private suspend fun handleGameState(state: LichessGameState) {
@@ -628,7 +627,7 @@ class LichessAdapter(
             return
         }
 
-        // Detect new opponent moves FIRST — a terminal gameState (e.g. checkmate)
+        // Detect new opponent moves FIRST: a terminal gameState (e.g. checkmate)
         // includes the final move, and we must emit it before emitting gameEnded.
         val moves = if (state.moves.isBlank()) emptyList() else state.moves.split(" ")
         val newMoveCount = moves.size
@@ -637,9 +636,9 @@ class LichessAdapter(
 
         if (newMoveCount > lastKnownMoveCount) {
             // Every move the update brought, in order, not just the last of them. One gameState
-            // can carry several - that is what a reconnection looks like, and it is the case
-            // handleGameFull replays this method for. Emitting only the final move left the game
-            // controller a move list with holes in it, which it then refused as illegal.
+            // can carry several: that is what a reconnection looks like, and it is the case
+            // handleGameFull replays this method for. Emitting only the final move would hand the
+            // game controller a move list with holes in it, which it refuses as illegal.
             for (index in lastKnownMoveCount until newMoveCount) {
                 val move = moves[index]
                 val movingColor = if (index % 2 == 0) firstMover else firstMover.opposite()
@@ -669,7 +668,7 @@ class LichessAdapter(
             val termination = mapLichessTermination(state.status)
             debugLog("Game ended: status=${state.status} winner=${state.winner} result=$result termination=${termination.code}")
             // Clearing this is what stops the reconnect loop. Cancelling the job from inside the
-            // coroutine running it would have left the emission below in a cancelled coroutine.
+            // coroutine running it would leave the emission below in a cancelled coroutine.
             currentGameId = null
             _gameEnded.emit(RemoteGameEndedEvent(result = result, termination = termination))
             return
@@ -697,10 +696,10 @@ class LichessAdapter(
     /**
      * Maps a Lichess status and winner to a PGN-style result string.
      *
-     * - `"1-0"` — white wins
-     * - `"0-1"` — black wins
-     * - `"1/2-1/2"` — draw (including `outoftime` with no winner, i.e. insufficient material)
-     * - `"*"` — game aborted or indeterminate
+     * - `"1-0"`: white wins
+     * - `"0-1"`: black wins
+     * - `"1/2-1/2"`: draw (including `outoftime` with no winner, i.e. insufficient material)
+     * - `"*"`: game aborted or indeterminate
      */
     private fun mapLichessResult(status: String, winner: String?, myColor: Color): GameResult {
         if (status == "draw" || status == "stalemate") return GameResult.DRAW
@@ -733,7 +732,7 @@ class LichessAdapter(
 /**
  * The failure this exception represents, as the protocol names it.
  *
- * The distinction the protocol draws is the player's, not the transport's (PROTOCOL.md 7.2): a
+ * The distinction the protocol draws is the player's, not the transport's: a
  * platform that answered and refused is worth a different sentence, and a different decision about
  * retrying, from one that could not be reached. Mapping everything but one status onto UNREACHABLE
  * threw that away and told a player whose token had expired that their network was down.
@@ -753,7 +752,7 @@ private fun Color.opposite(): Color = when (this) {
 }
 
 /**
- * The side to move in a FEN — its second field.
+ * The side to move in a FEN, its second field.
  *
  * Falls back to white for a FEN that cannot be read, which is what the standard position says and
  * what every game the adapter can seek starts from anyway.
@@ -771,7 +770,7 @@ internal fun mapLichessTermination(status: String): Termination = when (status) 
     // cause is genuinely unknown. That it was a draw is in the result, not here.
     "draw" -> Termination.Other(authorityCode = status)
     // No text: "fair play violation" would be this module's wording, not Lichess's, and
-    // `text` is for the words the platform itself supplied (§2.6).
+    // `text` is for the words the platform itself supplied.
     "cheat" -> Termination.Other(authorityCode = status)
     "variantEnd" -> Termination.Other(authorityCode = status)
     else -> Termination.Other(authorityCode = status)

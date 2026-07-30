@@ -384,8 +384,8 @@ class GameControllerTest {
 
     @Test
     fun `setResult relays the authority's termination untouched`() = runTest {
-        // There is no longer a status to derive from it. The status says the game is over, the
-        // result says how it turned out, and the termination says why - each once.
+        // The status says the game is over, the result says how it turned out, and the
+        // termination says why, each of them exactly once.
         val cases = listOf(
             Termination.Checkmate,
             Termination.Resignation,
@@ -452,7 +452,7 @@ class GameControllerTest {
     @Test
     fun `external authority does not auto-end on 75-move rule`() = runTest {
         val gc = GameController(backgroundScope)
-        // Half-move clock at 149 — next move is the 75th full move
+        // Half-move clock at 149: next move is the 75th full move
         val fen = "3k4/2b5/8/3r4/8/8/3K4/7B w - - 149 1"
         val gameId = createGame(gc, fen = fen, authority = Authority.EXTERNAL)
 
@@ -571,7 +571,7 @@ class GameControllerTest {
 
         val error = assertIs<Result.Failure<GameError>>(result).error
         // Not ILLEGAL_MOVE: the rules engine only ever offers moves for the side to move, so
-        // asking it makes the two indistinguishable - and only one of them is the player's doing.
+        // asking it makes the two indistinguishable, and only one of them is the player's doing.
         assertIs<GameError.NotYourTurn>(error)
     }
 
@@ -657,8 +657,8 @@ class GameControllerTest {
         assertIs<Result.Success<GameState>>(state)
         assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.BLACK_WINS, state.value.result)
-        // The increment used to be added to the overrun, leaving white better off than they
-        // started: 1000 - 3000 + 5000 = 3000.
+        // Adding the increment to the overrun would leave white better off than they started:
+        // 1000 - 3000 + 5000 = 3000.
         assertEquals(0, state.value.clocks!!.whiteMs)
         assertEquals(Termination.Timeout, endings.single().termination)
 
@@ -780,10 +780,8 @@ class GameControllerTest {
 
     @Test
     fun `a flag fall under FIDE 6 9 is both a timeout and a draw`() = runTest {
-        // The ending that the old vocabulary could not express. It had to be reported either as a
-        // timeout, losing that nobody won, or as DRAWN, losing that a clock is what stopped it -
-        // and the code did both at once, saying `timeout` in the status and `drawn` in the
-        // termination. With the cause and the outcome in separate fields, both are simply true.
+        // A flag fall that is also a draw. The cause and the outcome live in separate fields, so
+        // the game can be timed out and drawn at once without either contradicting the other.
         val timeSource = FakeTimeSource(0L)
         val gc = GameController(this, timeSource)
         val endings = mutableListOf<GameEndedEvent>()

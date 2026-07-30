@@ -3,13 +3,13 @@ package scp.protocol
 /**
  * Something the user needs to be told, identified rather than worded.
  *
- * An open vocabulary (PROTOCOL.md §2.7). The Orchestrator says which of these happened and hands
- * over the values that go with it; the UI writes the sentence, because it is the only module that
- * can know who is reading (§2.6).
+ * An open vocabulary, in the protocol's sense. The Orchestrator says which of these happened and
+ * hands over the values that go with it; the UI writes the sentence, because it is the only module
+ * that can know who is reading.
  *
  * Cases carrying a [ModuleError] pass the error itself rather than a rendering of it, so a UI can
- * word the wrapper - "the move was refused" - and decide separately what to do with the module's
- * own code and text.
+ * word the wrapper ("the move was refused") and decide separately what to do with the module's own
+ * code and text.
  */
 sealed interface UIMessage {
 
@@ -124,7 +124,7 @@ sealed interface UIMessage {
     /**
      * A failure with nothing better to say about it than what an exception said.
      *
-     * [diagnostic] is developer-facing (§2.6) and is not part of the message: a UI words this one
+     * [diagnostic] is developer-facing and is not part of the message: a UI words this one
      * itself and may log the detail, but must not present it as the explanation. It is the last
      * resort, not a substitute for cataloguing a failure that turns out to be common.
      */
@@ -136,8 +136,8 @@ sealed interface UIMessage {
      * A message outside this catalogue.
      *
      * For an Orchestrator with something to say that the vocabulary does not name. Carries its own
-     * identifier and, where it has one, wording that came from outside the system - the only text
-     * §2.6 permits a UI to present as-is.
+     * identifier and, where it has one, wording that came from outside the system: the only text
+     * the protocol permits a UI to present as-is.
      */
     data class Other(
         val authorityCode: String? = null,

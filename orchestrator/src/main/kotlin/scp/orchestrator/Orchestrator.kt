@@ -94,7 +94,7 @@ class Orchestrator(
     }
 
     private suspend fun handleEvent(event: OrchestratorEvent) {
-        // NewGameRequested is always handled — clean up any active state first
+        // NewGameRequested is always handled: clean up any active state first
         if (event is OrchestratorEvent.NewGameRequested && state !is OrchestratorState.Idle) {
             session?.remote?.cancelSeek()
             stopModuleCollectors()
@@ -103,16 +103,16 @@ class Orchestrator(
             // Fall through to handleIdle which will call runSetup()
         }
 
-        // An event naming a game it is no longer time for is dropped. A UI can queue an action
-        // that outlives the game it was made in - a resignation pressed as a game ends and
-        // delivered after the next one has started - and acting on it would end a game nobody
-        // asked to end. game.ended and game.flagFall make the same check for themselves, because
-        // they have somewhere to put the id they carry.
+        // An event naming a game other than the one being played is dropped. A UI can queue an
+        // action that outlives the game it was made in, such as a resignation pressed as a game
+        // ends and delivered after the next one has started, and acting on it would end a game
+        // nobody asked to end. game.ended and game.flagFall make the same check for themselves,
+        // because they have somewhere to put the id they carry.
         event.targetGameId()?.let { target ->
             if (target != session?.gameId) return
         }
 
-        // Global interrupts — checked first when a game is active
+        // Global interrupts, checked first when a game is active
         if (session != null) {
             when (event) {
                 is OrchestratorEvent.GameEnded -> {
@@ -256,10 +256,10 @@ class Orchestrator(
 
         // A game that has already ended is not one to await a move in. Ending it is not this
         // method's to do, though: the game controller announces every ending on game.ended,
-        // carrying the termination, and that event is already on its way - submitMove emits it
-        // before it returns. Ending the game here as well meant racing it and winning, so the
-        // real termination was dropped along with the event and every checkmate reached the UI
-        // as OTHER. Returning leaves the ending to the one party that knows what it was.
+        // carrying the termination, and that event is already on its way, since submitMove emits
+        // it before it returns. Ending the game here as well would win that race, and the real
+        // termination would be dropped with the event it rode in on. Returning leaves the ending
+        // to the one party that knows what it was.
         if (gameState.status.isFinished) return
 
         when (s.mode) {
@@ -271,7 +271,7 @@ class Orchestrator(
                 if (gameState.turn == playerColor) {
                     state = OrchestratorState.AwaitingPlayerMove(gameState.turn)
                 } else {
-                    // Engine's turn — handle inline
+                    // Engine's turn: handle inline
                     state = OrchestratorState.AwaitingOpponentMove(gameState.turn)
                     handleEngineMove()
                 }

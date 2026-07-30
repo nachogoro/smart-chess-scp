@@ -35,10 +35,9 @@ interface UIModule {
 /**
  * Who offered a draw.
  *
- * [name] is a name a player supplied and is shown as it stands - it is not ours to translate.
+ * [name] is a name a player supplied and is shown as it stands: it is not ours to translate.
  * Where there is none the UI words the offer from [color], and where that is unknown too, as the
- * opponent. The Orchestrator used to fill those gaps itself with "White" and "opponent", which are
- * wordings only a UI can choose.
+ * opponent. Choosing those words is the UI's, since no other module knows what the player reads.
  */
 data class DrawOffer(val name: String? = null, val color: Color? = null)
 
@@ -111,8 +110,8 @@ sealed class UIError(override val code: String) : ModuleError {
  * The user has finished their physical move.
  *
  * [color] is the player who signalled. The orchestrator works out what was actually played by
- * reading the board rather than from this, because the board is the authority on what moved - but
- * a UI knows which player pressed, and the protocol has it report that.
+ * reading the board rather than from this, because the board is the authority on what moved.
+ * Which player pressed is the one part only the UI knows.
  */
 data class MoveReadyEvent(val gameId: String, val color: Color)
 
@@ -121,8 +120,8 @@ data class MoveReadyEvent(val gameId: String, val color: Color)
  *
  * [color] is whose resignation it is, and it is the UI's to decide because only the UI knows how
  * the request was made. A local game is two people at one board: whether the Resign button belongs
- * to the player to move, or there is one for each of them, is a question about the screen, and
- * inferring the answer here got it wrong for whichever of them was not to move.
+ * to the player to move, or there is one for each of them, is a question about the screen, and no
+ * module below it can answer that from the position alone.
  */
 data class ResignRequestedEvent(val gameId: String, val color: Color)
 

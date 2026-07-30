@@ -240,9 +240,9 @@ class MoveHandlingTest {
 
     @Test
     fun `engine is given the game history and a time budget`() = runTest(UnconfinedTestDispatcher()) {
-        // Sending only the current position left the engine unable to see repetitions, and
-        // sending no budget left it searching to whatever fixed depth its adapter defaults to -
-        // which bears no relation to the clock, and is how the engine flags its opponent.
+        // Sending only the current position would leave the engine unable to see repetitions, and
+        // sending no budget would leave it searching to whatever fixed depth its adapter defaults
+        // to, which bears no relation to the clock and is how an engine flags its opponent.
         val tc = TimeControl(TimeControlType.FISCHER, initialMs = 300_000, incrementMs = 2_000)
         val orchestrator = startEngineGame(playerColor = Color.WHITE, timeControl = tc)
         val gameId = orchestrator.session!!.gameId
@@ -439,8 +439,8 @@ class MoveHandlingTest {
             ui.emitResignRequested(gameId)
 
             assertTrue(remote.resignCalled)
-            // Resigning locally as well committed to an outcome the server had not agreed to,
-            // and left the setResult relaying the real ending to find the game already over.
+            // Resigning locally as well would commit to an outcome the server has not agreed to,
+            // leaving the setResult that relays the real ending to find the game already over.
             assertNull(gc.lastResign)
             assertNotNull(orchestrator.session)
 
@@ -584,8 +584,9 @@ class MoveHandlingTest {
 
     @Test
     fun `a player asking twice does not accept their own offer`() = runTest(UnconfinedTestDispatcher()) {
-        // The remote flow leaves an offer standing while the server is asked, so the second tap
-        // of Draw used to walk straight into the accept branch and end the player's own game.
+        // The remote flow leaves an offer standing while the server is asked, so without checking
+        // whose it is, a second tap of Draw walks into the accept branch and ends the player's
+        // own game.
         val drawOfferedGc = offerPendingFrom(Color.WHITE)
         gc = drawOfferedGc
         val orchestrator = createOrchestrator(withRemote = true)

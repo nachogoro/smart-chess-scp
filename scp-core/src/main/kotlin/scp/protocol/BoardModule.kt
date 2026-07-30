@@ -11,7 +11,7 @@ interface BoardModule {
      *
      * Carries the error itself, so an asynchronous failure says as much as a refused call does:
      * a sensor failure names the squares it could not trust, and a UI can tell the player which
-     * pieces to re-seat rather than only that something went wrong (PROTOCOL.md §4.1).
+     * pieces to re-seat rather than only that something went wrong.
      */
     val errors: SharedFlow<BoardError>
 }
