@@ -245,7 +245,7 @@ class GameControllerTest {
         assertIs<Result.Success<GameState>>(state)
         assertEquals(GameStatus.DRAW_OFFERED, state.value.status)
 
-        gc.respondDraw(gameId, accept = true)
+        gc.respondDraw(gameId, Color.BLACK, accept = true)
         val finalState = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(finalState)
         assertEquals(GameStatus.DRAW, finalState.value.status)
@@ -259,11 +259,25 @@ class GameControllerTest {
         gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4"))
 
         gc.offerDraw(gameId, Color.WHITE)
-        gc.respondDraw(gameId, accept = false)
+        gc.respondDraw(gameId, Color.BLACK, accept = false)
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
         assertEquals(GameStatus.IN_PROGRESS, state.value.status)
+    }
+
+    @Test
+    fun `a player cannot answer their own draw offer`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc)
+        gc.offerDraw(gameId, Color.WHITE)
+
+        val result = gc.respondDraw(gameId, Color.WHITE, accept = true)
+
+        assertIs<GameError.OwnDrawOffer>(assertIs<Result.Failure<GameError>>(result).error)
+        val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+        assertEquals(GameStatus.DRAW_OFFERED, state.status, "the offer is still waiting for a reply")
+        assertEquals(Color.WHITE, state.drawOffer)
     }
 
     @Test
@@ -272,7 +286,7 @@ class GameControllerTest {
         val gameId = createGame(gc)
         gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4"))
 
-        val result = gc.respondDraw(gameId, accept = true)
+        val result = gc.respondDraw(gameId, Color.BLACK, accept = true)
         assertIs<Result.Failure<GameError>>(result)
         assertIs<GameError.NoDrawOffer>(result.error)
     }
@@ -556,7 +570,7 @@ class GameControllerTest {
         assertEquals(GameStatus.IN_PROGRESS, state.status)
         // And the offer is gone, so responding to it now is not possible.
         assertIs<GameError.NoDrawOffer>(
-            assertIs<Result.Failure<GameError>>(gc.respondDraw(gameId, accept = true)).error
+            assertIs<Result.Failure<GameError>>(gc.respondDraw(gameId, Color.BLACK, accept = true)).error
         )
     }
 

@@ -202,53 +202,79 @@ internal suspend fun Orchestrator.handleResign() {
     }
 }
 
+/**
+ * Whose request a Draw tap is, given the mode.
+ *
+ * Local games are played by two people at one board, so it belongs to whoever is to move. In the
+ * others there is only one person here to make it.
+ */
+private fun Orchestrator.drawRequester(s: GameSession): Color? = when (s.mode) {
+    GameMode.LOCAL -> (state as? OrchestratorState.AwaitingPlayerMove)?.color
+    GameMode.ENGINE, GameMode.REMOTE -> s.playerColor
+}
+
 internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
     val s = session ?: return
+    val asker = drawRequester(s) ?: return
 
     // 1. Try claiming a draw (threefold repetition, 50-move rule, etc.)
     val claimResult = gameController.claimDraw(gameId)
     if (claimResult is Result.Success) return
 
-    // 2. If the opponent has offered a draw, accept it
+    // 2. If the *opponent* has offered a draw, accept it. Whose offer it is has to be checked:
+    //    a remote offer is left standing while the server is asked, so without this a second tap
+    //    of Draw accepted the player's own offer and ended their game for them.
     val gameState = gameController.getState(gameId).getOrNull()
-    if (gameState?.status == GameStatus.DRAW_OFFERED) {
+    val pendingOffer = gameState?.takeIf { it.status == GameStatus.DRAW_OFFERED }?.drawOffer
+    if (pendingOffer != null && pendingOffer != asker) {
         if (s.mode == GameMode.REMOTE) s.remote?.respondDraw(true)
-        gameController.respondDraw(gameId, true)
+        gameController.respondDraw(gameId, asker, true)
         return
     }
+    // An offer of the player's own is already with the opponent; there is nothing more to do.
+    if (pendingOffer == asker) return
 
     // 3. Otherwise, offer a draw
     when (s.mode) {
         GameMode.LOCAL -> {
-            val turnColor = (state as? OrchestratorState.AwaitingPlayerMove)?.color ?: return
-            gameController.offerDraw(s.gameId, turnColor)
+            gameController.offerDraw(s.gameId, asker)
 
             // Both players share one screen, so the opponent is asked outright rather than left an
-            // offer to discover. Leaving it pending would mean the next Draw tap agreed the draw
-            // with no confirmation - including a second tap from the player who offered it.
-            val offeredBy = when (turnColor) {
+            // offer to discover.
+            val offeredBy = when (asker) {
                 Color.WHITE -> DrawOffer(s.whiteName, Color.WHITE)
                 Color.BLACK -> DrawOffer(s.blackName, Color.BLACK)
             }
             val accepted = ui.promptDrawResponse(s.gameId, offeredBy).getOrNull() ?: false
-            gameController.respondDraw(s.gameId, accepted)
+            gameController.respondDraw(s.gameId, asker.opposite(), accepted)
         }
         GameMode.ENGINE -> {
             ui.displayError(UIMessage.DrawNotSupportedByEngine)
         }
         GameMode.REMOTE -> {
             s.remote?.offerDraw()
-            val playerColor = s.playerColor ?: return
-            gameController.offerDraw(s.gameId, playerColor)
+            gameController.offerDraw(s.gameId, asker)
         }
     }
 }
 
 internal suspend fun Orchestrator.handleRemoteDrawOffer() {
     val s = session ?: return
-    val accept = ui.promptDrawResponse(s.gameId, DrawOffer()).getOrNull() ?: return
+    val playerColor = s.playerColor ?: return
+    val accept = ui.promptDrawResponse(s.gameId, DrawOffer(color = playerColor.opposite()))
+        .getOrNull() ?: return
+
     s.remote?.respondDraw(accept)
-    if (accept) {
-        gameController.respondDraw(s.gameId, true)
-    }
+    if (!accept) return
+
+    // Record the opponent's offer before answering it. Nothing local made this offer - it arrived
+    // from the server - so without it the answer is one to an offer the game controller has never
+    // heard of, which it rightly refuses.
+    gameController.offerDraw(s.gameId, playerColor.opposite())
+    gameController.respondDraw(s.gameId, playerColor, true)
+}
+
+private fun Color.opposite(): Color = when (this) {
+    Color.WHITE -> Color.BLACK
+    Color.BLACK -> Color.WHITE
 }

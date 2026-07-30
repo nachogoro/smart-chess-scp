@@ -193,7 +193,7 @@ class GameController(
         return Result.Success(Unit)
     }
 
-    override suspend fun respondDraw(gameId: String, accept: Boolean): Result<GameError, Unit> {
+    override suspend fun respondDraw(gameId: String, color: Color, accept: Boolean): Result<GameError, Unit> {
         val game = games[gameId]
             ?: return Result.Failure(GameError.GameNotFound())
 
@@ -201,6 +201,14 @@ class GameController(
 
         if (game.status != GameStatus.DRAW_OFFERED) {
             return Result.Failure(GameError.NoDrawOffer())
+        }
+
+        // A draw takes two players. This call used to carry no colour at all, so nothing here
+        // could tell agreement from a player answering their own offer - and in a remote game,
+        // where the offer is left standing while the server is asked, a second tap of Draw did
+        // exactly that and ended the game.
+        if (game.drawOffer == color) {
+            return Result.Failure(GameError.OwnDrawOffer())
         }
 
         if (accept) {
@@ -492,5 +500,6 @@ class GameController(
         turn = turn,
         clocks = clocks,
         result = result,
+        drawOffer = drawOffer,
     )
 }

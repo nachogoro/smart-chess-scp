@@ -514,7 +514,7 @@ class MoveHandlingTest {
                 gameId to DrawOffer(name = "White", color = Color.WHITE),
                 ui.lastDrawResponsePrompt,
             )
-            assertEquals(gameId to true, controller.lastDrawResponse)
+            assertEquals(Triple(gameId, Color.BLACK, true), controller.lastDrawResponse)
 
             orchestrator.stop()
         }
@@ -534,26 +534,32 @@ class MoveHandlingTest {
         assertNotNull(ui.lastDrawResponsePrompt)
         // Answered rather than left pending: the offer must not survive to be accepted by a later
         // stray Draw tap.
-        assertEquals(gameId to false, controller.lastDrawResponse)
+        assertEquals(Triple(gameId, Color.BLACK, false), controller.lastDrawResponse)
 
         orchestrator.stop()
     }
 
     @Test
-    fun `draw request accepts pending draw offer when claim fails`() = runTest(UnconfinedTestDispatcher()) {
-        val drawOfferedGc = object : FakeGameControllerModule() {
-            override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
-                lastDrawClaim = gameId
-                return Result.Failure(GameError.InvalidClaim())
-            }
-            override suspend fun getState(gameId: String): Result<GameError, GameState> {
-                val state = super.getState(gameId)
-                return when (state) {
-                    is Result.Success -> Result.Success(state.value.copy(status = GameStatus.DRAW_OFFERED))
-                    is Result.Failure -> state
-                }
-            }
+    /** A controller reporting a draw offer outstanding from [offeredBy], and no claim available. */
+    private fun offerPendingFrom(offeredBy: Color) = object : FakeGameControllerModule() {
+        override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+            lastDrawClaim = gameId
+            return Result.Failure(GameError.InvalidClaim())
         }
+
+        override suspend fun getState(gameId: String): Result<GameError, GameState> =
+            when (val state = super.getState(gameId)) {
+                is Result.Success -> Result.Success(
+                    state.value.copy(status = GameStatus.DRAW_OFFERED, drawOffer = offeredBy)
+                )
+                is Result.Failure -> state
+            }
+    }
+
+    @Test
+    fun `draw request accepts a pending offer from the opponent`() = runTest(UnconfinedTestDispatcher()) {
+        // White is to move, so White is asking; the offer waiting is Black's.
+        val drawOfferedGc = offerPendingFrom(Color.BLACK)
         gc = drawOfferedGc
         val orchestrator = createOrchestrator()
         launchOrchestrator(orchestrator)
@@ -562,8 +568,28 @@ class MoveHandlingTest {
 
         ui.emitDrawRequested(gameId)
 
-        assertNotNull(drawOfferedGc.lastDrawResponse)
-        assertEquals(true, drawOfferedGc.lastDrawResponse!!.second)
+        assertEquals(Triple(gameId, Color.WHITE, true), drawOfferedGc.lastDrawResponse)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a player asking twice does not accept their own offer`() = runTest(UnconfinedTestDispatcher()) {
+        // The remote flow leaves an offer standing while the server is asked, so the second tap
+        // of Draw used to walk straight into the accept branch and end the player's own game.
+        val drawOfferedGc = offerPendingFrom(Color.WHITE)
+        gc = drawOfferedGc
+        val orchestrator = createOrchestrator(withRemote = true)
+        launchOrchestrator(orchestrator)
+        ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
+        ui.emitNewGameRequested()
+        remote.emitGameStarted(GameStartedEvent("r1", Color.WHITE, "opp", startFen, null))
+        val gameId = orchestrator.session!!.gameId
+
+        ui.emitDrawRequested(gameId)
+
+        assertNull(drawOfferedGc.lastDrawResponse, "a draw takes two players")
+        assertNull(remote.lastDrawResponse)
 
         orchestrator.stop()
     }
@@ -629,7 +655,7 @@ class MoveHandlingTest {
 
         assertEquals(true, remote.lastDrawResponse)
         assertNotNull(gc.lastDrawResponse)
-        assertEquals(true, gc.lastDrawResponse!!.second)
+        assertEquals(true, gc.lastDrawResponse!!.third)
 
         orchestrator.stop()
     }

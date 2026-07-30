@@ -8,7 +8,7 @@ interface GameControllerModule {
     suspend fun submitMove(params: SubmitMoveParams): Result<GameError, SubmitMoveResult>
     suspend fun resign(gameId: String, color: Color): Result<GameError, Unit>
     suspend fun offerDraw(gameId: String, color: Color): Result<GameError, Unit>
-    suspend fun respondDraw(gameId: String, accept: Boolean): Result<GameError, Unit>
+    suspend fun respondDraw(gameId: String, color: Color, accept: Boolean): Result<GameError, Unit>
     suspend fun claimDraw(gameId: String): Result<GameError, Unit>
     suspend fun abort(gameId: String): Result<GameError, Unit>
     suspend fun getHistory(gameId: String): Result<GameError, GameHistory>
@@ -36,6 +36,13 @@ data class GameState(
     val turn: Color,
     val clocks: Clocks?,
     val result: GameResult,
+    /**
+     * Who has a draw offer outstanding, if anyone.
+     *
+     * Carried because a draw takes two players: without it a caller cannot tell an offer waiting
+     * for an answer from one it made itself, and would let a player agree a draw with nobody.
+     */
+    val drawOffer: Color? = null,
 )
 
 data class SubmitMoveParams(
@@ -97,6 +104,9 @@ sealed class GameError(
     class NotYourTurn : GameError("NOT_YOUR_TURN")
     class InvalidClaim : GameError("INVALID_CLAIM")
     class NoDrawOffer : GameError("NO_DRAW_OFFER")
+
+    /** A player tried to answer their own draw offer. A draw takes two. */
+    class OwnDrawOffer : GameError("OWN_DRAW_OFFER")
     class ExternalAuthority : GameError("EXTERNAL_AUTHORITY")
     class InvalidAuthority : GameError("INVALID_AUTHORITY")
 }

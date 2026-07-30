@@ -47,7 +47,7 @@ open class FakeGameControllerModule : GameControllerModule {
     var lastSubmittedMove: SubmitMoveParams? = null
     var lastResign: Pair<String, Color>? = null
     var lastDrawOffer: Pair<String, Color>? = null
-    var lastDrawResponse: Pair<String, Boolean>? = null
+    var lastDrawResponse: Triple<String, Color, Boolean>? = null
     var lastDrawClaim: String? = null
     var lastAbort: String? = null
     var lastSetResult: SetResultParams? = null
@@ -104,8 +104,8 @@ open class FakeGameControllerModule : GameControllerModule {
         return Result.Success(Unit)
     }
 
-    override suspend fun respondDraw(gameId: String, accept: Boolean): Result<GameError, Unit> {
-        lastDrawResponse = gameId to accept
+    override suspend fun respondDraw(gameId: String, color: Color, accept: Boolean): Result<GameError, Unit> {
+        lastDrawResponse = Triple(gameId, color, accept)
         return Result.Success(Unit)
     }
 
