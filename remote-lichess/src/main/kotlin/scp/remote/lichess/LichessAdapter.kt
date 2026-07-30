@@ -59,6 +59,15 @@ class LichessAdapter(
     /** Number of moves the adapter knows about, used to detect new opponent moves via diffing. */
     private var lastKnownMoveCount: Int = 0
 
+    /**
+     * Which colour played the game's first move, read from the starting position.
+     *
+     * Move `n` in the list belongs to this colour when `n` is even. Assuming white here instead
+     * would invert every attribution in a game that did not start from the standard position,
+     * which [handleGameFull] otherwise takes care to support.
+     */
+    private var firstMover: Color = Color.WHITE
+
     private var eventStreamJob: Job? = null
     private var seekJob: Job? = null
     private var gameStreamJob: Job? = null
@@ -501,6 +510,7 @@ class LichessAdapter(
         }
 
         val fen = if (game.initialFen == "startpos") STANDARD_FEN else game.initialFen
+        firstMover = activeColorOf(fen)
 
         val timeControl = game.clock?.let {
             TimeControl(
@@ -552,19 +562,27 @@ class LichessAdapter(
         debugLog("Move detection: newMoveCount=$newMoveCount lastKnownMoveCount=$lastKnownMoveCount myColor=$color")
 
         if (newMoveCount > lastKnownMoveCount) {
-            val latestMove = moves.last()
-            val movingColor = if (newMoveCount % 2 == 1) Color.WHITE else Color.BLACK
-            debugLog("New move: $latestMove by $movingColor (I am $color)")
-            if (movingColor != color) {
-                debugLog("Emitting opponentMove: $latestMove")
-                _opponentMove.emit(
-                    OpponentMoveEvent(
-                        move = latestMove,
-                        clocks = Clocks(whiteMs = state.wtime, blackMs = state.btime),
-                    )
-                )
-            } else {
-                debugLog("Move is mine, not emitting opponentMove")
+            // Every move the update brought, in order, not just the last of them. One gameState
+            // can carry several - that is what a reconnection looks like, and it is the case
+            // handleGameFull replays this method for. Emitting only the final move left the game
+            // controller a move list with holes in it, which it then refused as illegal.
+            for (index in lastKnownMoveCount until newMoveCount) {
+                val move = moves[index]
+                val movingColor = if (index % 2 == 0) firstMover else firstMover.opposite()
+                debugLog("New move: $move by $movingColor (I am $color)")
+                if (movingColor == color) {
+                    debugLog("Move is mine, not emitting opponentMove")
+                    continue
+                }
+                // Only the last move gets the clocks: wtime/btime describe the state this update
+                // arrived in, and attaching them to an earlier move would misreport it.
+                val clocks = if (index == newMoveCount - 1) {
+                    Clocks(whiteMs = state.wtime, blackMs = state.btime)
+                } else {
+                    null
+                }
+                debugLog("Emitting opponentMove: $move")
+                _opponentMove.emit(OpponentMoveEvent(move = move, clocks = clocks))
             }
             lastKnownMoveCount = newMoveCount
         } else {
@@ -637,6 +655,20 @@ class LichessAdapter(
  * `draw` covers every rule Lichess draws a game under and it does not say which, so the kind
  * is unnamed rather than guessed at.
  */
+private fun Color.opposite(): Color = when (this) {
+    Color.WHITE -> Color.BLACK
+    Color.BLACK -> Color.WHITE
+}
+
+/**
+ * The side to move in a FEN — its second field.
+ *
+ * Falls back to white for a FEN that cannot be read, which is what the standard position says and
+ * what every game the adapter can seek starts from anyway.
+ */
+internal fun activeColorOf(fen: String): Color =
+    if (fen.split(" ").getOrNull(1)?.lowercase() == "b") Color.BLACK else Color.WHITE
+
 internal fun mapLichessTermination(status: String): Termination = when (status) {
     "mate" -> Termination.Checkmate
     "resign" -> Termination.Resignation

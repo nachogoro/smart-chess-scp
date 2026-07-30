@@ -402,6 +402,64 @@ class LichessAdapterTest {
     }
 
     @Test
+    fun `several moves arriving at once are all delivered, in order`() = runTest {
+        // What a reconnection looks like: one gameState carrying everything played while away.
+        // Emitting only the last of them left the game controller a move list with holes in it.
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+
+        val moves = mutableListOf<OpponentMoveEvent>()
+        val collectJob = launch { adapter.opponentMove.collect { moves.add(it) } }
+
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        // We are white; four moves land in one update, two of them the opponent's.
+        api.gameStreamChannel.send(gameState(moves = "e2e4 e7e5 g1f3 b8c6", btime = 880000))
+        advanceUntilIdle()
+
+        assertEquals(listOf("e7e5", "b8c6"), moves.map { it.move })
+        // Only the latest move carries the clocks the update reported.
+        assertNull(moves.first().clocks)
+        assertEquals(880000, moves.last().clocks?.blackMs)
+
+        collectJob.cancel()
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `move attribution follows the starting position, not the standard one`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+
+        val moves = mutableListOf<OpponentMoveEvent>()
+        val collectJob = launch { adapter.opponentMove.collect { moves.add(it) } }
+
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        // A position with BLACK to move, so the first move in the list is black's - and we are
+        // white, which makes it the opponent's.
+        api.gameStreamChannel.send(
+            gameFull(initialFen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1")
+        )
+        advanceUntilIdle()
+
+        api.gameStreamChannel.send(gameState(moves = "e7e5 g1f3"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("e7e5"), moves.map { it.move }, "black moved first from this position")
+
+        collectJob.cancel()
+        adapter.disconnect()
+    }
+
+    @Test
     fun `own move does not emit opponentMove`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)
