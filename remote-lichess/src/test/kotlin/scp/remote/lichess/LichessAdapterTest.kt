@@ -609,6 +609,39 @@ class LichessAdapterTest {
         adapter.disconnect()
     }
 
+    // -- Event flows do not replay --
+
+    @Test
+    fun `a subscriber arriving after a game ends hears nothing of it`() = runTest {
+        // The adapter outlives a game; the orchestrator subscribes per game. A replay buffer
+        // handed the next game's collectors the previous game's ending the moment they
+        // subscribed, which finished the new game before it had begun.
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameState(moves = "e2e4", status = "resign", winner = "black"))
+        advanceUntilIdle()
+
+        val endings = mutableListOf<RemoteGameEndedEvent>()
+        val starts = mutableListOf<GameStartedEvent>()
+        val collectJob = launch { adapter.gameEnded.collect { endings.add(it) } }
+        val startJob = launch { adapter.gameStarted.collect { starts.add(it) } }
+        advanceUntilIdle()
+
+        assertTrue(endings.isEmpty(), "the finished game's ending must not be replayed")
+        assertTrue(starts.isEmpty(), "the finished game's start must not be replayed")
+
+        collectJob.cancel()
+        startJob.cancel()
+        adapter.disconnect()
+    }
+
     // -- SendMove / Resign / Draw --
 
     @Test

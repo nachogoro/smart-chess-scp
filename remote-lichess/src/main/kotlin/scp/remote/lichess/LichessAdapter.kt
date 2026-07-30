@@ -10,6 +10,9 @@ import scp.protocol.*
 private const val STANDARD_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 private const val MIN_SEEK_TIME_MINUTES = 10
 
+/** Room for a burst of stream events so emitting never blocks on a collector. */
+private const val EVENT_BUFFER = 16
+
 private fun debugLog(msg: String) = scp.protocol.debugLog("[lichess] $msg")
 
 /**
@@ -60,19 +63,26 @@ class LichessAdapter(
     private var seekJob: Job? = null
     private var gameStreamJob: Job? = null
 
-    private val _gameStarted = MutableSharedFlow<GameStartedEvent>(replay = 1)
+    // These are notifications, not state, so none of them replays. The adapter outlives a single
+    // game while the orchestrator subscribes per game, and a replay buffer handed each new set of
+    // collectors the *previous* game's last event the moment they subscribed: a replayed
+    // gameStarted built the next game from the old game's colour and position, and a replayed
+    // gameEnded finished it before it began. Buffering without replay keeps the stream coroutines
+    // from stalling on a slow collector while guaranteeing a subscriber only ever hears what
+    // happens after it subscribes.
+    private val _gameStarted = MutableSharedFlow<GameStartedEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val gameStarted: SharedFlow<GameStartedEvent> = _gameStarted
 
-    private val _opponentMove = MutableSharedFlow<OpponentMoveEvent>(replay = 1)
+    private val _opponentMove = MutableSharedFlow<OpponentMoveEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val opponentMove: SharedFlow<OpponentMoveEvent> = _opponentMove
 
-    private val _gameEnded = MutableSharedFlow<RemoteGameEndedEvent>(replay = 1)
+    private val _gameEnded = MutableSharedFlow<RemoteGameEndedEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val gameEnded: SharedFlow<RemoteGameEndedEvent> = _gameEnded
 
-    private val _drawOffered = MutableSharedFlow<Unit>(replay = 1)
+    private val _drawOffered = MutableSharedFlow<Unit>(extraBufferCapacity = EVENT_BUFFER)
     override val drawOffered: SharedFlow<Unit> = _drawOffered
 
-    private val _errors = MutableSharedFlow<RemoteErrorEvent>(replay = 1)
+    private val _errors = MutableSharedFlow<RemoteErrorEvent>(extraBufferCapacity = EVENT_BUFFER)
     override val errors: SharedFlow<RemoteErrorEvent> = _errors
 
     /**
