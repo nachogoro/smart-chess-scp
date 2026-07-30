@@ -118,7 +118,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
-        gc.createFail = GameError.GameNotFound("Creation failed")
+        gc.createFail = GameError.GameNotFound()
         ui.configureLocalGameResponses = mutableListOf(
             Result.Success(LocalGameConfig("White", "Black", null)),
         )
@@ -223,7 +223,7 @@ class SetupFlowsTest {
             Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
         )
         ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
-        gc.createFail = GameError.GameNotFound("Creation failed")
+        gc.createFail = GameError.GameNotFound()
         ui.emitNewGameRequested()
 
         assertEquals("GAME_NOT_FOUND", assertIs<UIMessage.GameCreationFailed>(ui.lastConfigureEngineParams?.errorMessage).error.code)
@@ -258,7 +258,7 @@ class SetupFlowsTest {
             Result.Success(EngineGameConfig(playerColor = Color.WHITE, engineSettings = emptyMap(), timeControl = null)),
         )
         ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
-        engine.configureFail = EngineError.NotConfigured("Bad settings")
+        engine.configureFail = EngineError.NotConfigured()
         ui.emitNewGameRequested()
 
         assertEquals("NOT_CONFIGURED", assertIs<UIMessage.EngineConfigurationFailed>(ui.lastConfigureEngineParams?.errorMessage).error.code)
@@ -414,7 +414,7 @@ class SetupFlowsTest {
             Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
         )
         ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
-        remote.seekFail = RemoteError.InvalidParams("Bad seek params")
+        remote.seekFail = RemoteError.InvalidParams("time")
         ui.emitNewGameRequested()
 
         assertEquals("INVALID_PARAMS", assertIs<UIMessage.SeekFailed>(ui.lastConfigureRemoteParams?.errorMessage).error.code)
@@ -434,7 +434,7 @@ class SetupFlowsTest {
         assertIs<OrchestratorState.SeekingGame>(orchestrator.state)
 
         // Make game creation fail when remote game starts
-        gc.createFail = GameError.GameNotFound("Creation failed")
+        gc.createFail = GameError.GameNotFound()
 
         remote.emitGameStarted(GameStartedEvent(
             gameId = "r1", color = Color.WHITE,

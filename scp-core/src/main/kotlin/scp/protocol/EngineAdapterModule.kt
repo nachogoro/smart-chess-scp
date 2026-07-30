@@ -32,11 +32,25 @@ data class BestMoveResult(
     val pv: List<String>? = null,
 )
 
-sealed class EngineError(override val code: String, override val message: String) : ModuleError {
-    class EngineCrashed(message: String = "Engine crashed") : EngineError("ENGINE_CRASHED", message)
-    class InvalidPosition(message: String = "Invalid position") : EngineError("INVALID_POSITION", message)
-    class NotConfigured(message: String = "Engine not configured") : EngineError("NOT_CONFIGURED", message)
-    class InvalidParams(message: String = "Invalid parameters") : EngineError("INVALID_PARAMS", message)
+sealed class EngineError(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError {
+    class EngineCrashed(diagnostic: String? = null) : EngineError("ENGINE_CRASHED", diagnostic)
+    class InvalidPosition(diagnostic: String? = null) : EngineError("INVALID_POSITION", diagnostic)
+    class NotConfigured : EngineError("NOT_CONFIGURED")
+
+    /**
+     * A setting the engine would not take.
+     *
+     * [parameter] is the descriptor's name, so a UI can point at the field the player filled in.
+     * What was wrong with it is not carried: the UI rendered the field from a ParameterDescriptor
+     * and already knows its type and bounds.
+     */
+    class InvalidParams(val parameter: String? = null) : EngineError("INVALID_PARAMS")
 }
 
-data class EngineErrorEvent(override val code: String, override val message: String) : ModuleError
+data class EngineErrorEvent(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError

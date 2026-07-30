@@ -165,18 +165,18 @@ class LichessAdapter(
      */
     override suspend fun configure(settings: Map<String, Any>): Result<RemoteError, ConfigureResult> {
         val apiToken = settings["api_token"] as? String
-            ?: return Result.Failure(RemoteError.InvalidParams("api_token is required"))
+            ?: return Result.Failure(RemoteError.InvalidParams("api_token"))
 
         val account = try {
             api.getAccount(apiToken)
         } catch (e: LichessApiException) {
             return if (e.statusCode == 401) {
-                Result.Failure(RemoteError.AuthFailed("Invalid API token"))
+                Result.Failure(RemoteError.AuthFailed())
             } else {
-                Result.Failure(RemoteError.PlatformError("Lichess error: ${e.message}"))
+                Result.Failure(RemoteError.PlatformError(e.statusCode, e.message))
             }
         } catch (e: Exception) {
-            return Result.Failure(RemoteError.PlatformError("Connection error: ${e.message}"))
+            return Result.Failure(RemoteError.Unreachable(e.message))
         }
 
         token = apiToken
@@ -229,7 +229,7 @@ class LichessAdapter(
                 try {
                     api.challengeAi(t, level, time, increment, color)
                 } catch (e: Exception) {
-                    return Result.Failure(RemoteError.PlatformError("AI challenge failed: ${e.message}"))
+                    return Result.Failure(RemoteError.Unreachable(e.message))
                 }
             }
             else -> {
@@ -240,7 +240,7 @@ class LichessAdapter(
                             "Friend" -> {
                                 val opponent = settings["opponent_name"] as? String
                                     ?: return@launch _errors.emit(
-                                        RemoteErrorEvent("INVALID_PARAMS", "opponent_name is required for friend challenges")
+                                        RemoteErrorEvent("INVALID_PARAMS", diagnostic = "opponent_name is required for friend challenges")
                                     )
                                 api.createChallenge(t, opponent, time, increment, rated, color)
                             }
@@ -253,7 +253,7 @@ class LichessAdapter(
                         stream.collect {}
                     } catch (e: Exception) {
                         val action = if (opponentType == "Friend") "Challenge" else "Seek"
-                        _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", "$action failed: ${e.message}"))
+                        _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", diagnostic = "$action failed: ${e.message}"))
                     }
                 }
             }
@@ -278,7 +278,7 @@ class LichessAdapter(
      */
     override suspend fun sendMove(move: String): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
-        val gameId = currentGameId ?: return Result.Failure(RemoteError.PlatformError("No active game"))
+        val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
             debugLog("sendMove: $move (gameId=$gameId, lastKnownMoveCount=$lastKnownMoveCount)")
@@ -287,38 +287,38 @@ class LichessAdapter(
             Result.Success(Unit)
         } catch (e: LichessApiException) {
             if (e.statusCode == 400) {
-                Result.Failure(RemoteError.PlatformError("Move rejected: ${e.message}"))
+                Result.Failure(RemoteError.PlatformError(e.statusCode, e.message))
             } else {
-                Result.Failure(RemoteError.PlatformError("Error sending move: ${e.message}"))
+                Result.Failure(RemoteError.Unreachable(e.message))
             }
         } catch (e: Exception) {
-            Result.Failure(RemoteError.PlatformError("Error sending move: ${e.message}"))
+            Result.Failure(RemoteError.Unreachable(e.message))
         }
     }
 
     /** Resigns the current game. */
     override suspend fun resign(): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
-        val gameId = currentGameId ?: return Result.Failure(RemoteError.PlatformError("No active game"))
+        val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
             api.resign(t, gameId)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.PlatformError("Error resigning: ${e.message}"))
+            Result.Failure(RemoteError.Unreachable(e.message))
         }
     }
 
     /** Offers a draw to the opponent in the current game. */
     override suspend fun offerDraw(): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
-        val gameId = currentGameId ?: return Result.Failure(RemoteError.PlatformError("No active game"))
+        val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
             api.offerDraw(t, gameId)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.PlatformError("Error offering draw: ${e.message}"))
+            Result.Failure(RemoteError.Unreachable(e.message))
         }
     }
 
@@ -329,13 +329,13 @@ class LichessAdapter(
      */
     override suspend fun respondDraw(accept: Boolean): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
-        val gameId = currentGameId ?: return Result.Failure(RemoteError.PlatformError("No active game"))
+        val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
             api.respondDraw(t, gameId, accept)
             Result.Success(Unit)
         } catch (e: Exception) {
-            Result.Failure(RemoteError.PlatformError("Error responding to draw: ${e.message}"))
+            Result.Failure(RemoteError.Unreachable(e.message))
         }
     }
 

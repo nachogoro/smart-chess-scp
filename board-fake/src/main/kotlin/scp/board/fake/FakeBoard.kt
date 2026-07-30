@@ -54,7 +54,7 @@ class FakeBoard(
      * Returns the board's capability level, read from the first line of the file.
      */
     override suspend fun getCapabilities(): Result<BoardError, BoardCapabilities> {
-        val parsed = readFile() ?: return Result.Failure(BoardError.NotReady("Cannot read board file"))
+        val parsed = readFile() ?: return Result.Failure(BoardError.NotReady(diagnostic = "the board file could not be read"))
         return Result.Success(BoardCapabilities(parsed.level))
     }
 
@@ -65,7 +65,7 @@ class FakeBoard(
      * immediately.
      */
     override suspend fun getState(): Result<BoardError, BoardState> {
-        val parsed = readFile() ?: return Result.Failure(BoardError.NotReady("Cannot read board file"))
+        val parsed = readFile() ?: return Result.Failure(BoardError.NotReady(diagnostic = "the board file could not be read"))
         return Result.Success(BoardState(parsed.squares))
     }
 

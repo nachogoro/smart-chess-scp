@@ -66,21 +66,21 @@ class RemoteStockfishAdapter(
             when (key) {
                 PARAM_DEPTH -> {
                     val v = (value as? Number)?.toInt()
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_DEPTH must be an integer"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_DEPTH))
                     if (v !in 1..18) {
-                        return Result.Failure(EngineError.InvalidParams("$PARAM_DEPTH must be between 1 and 18"))
+                        return Result.Failure(EngineError.InvalidParams(PARAM_DEPTH))
                     }
                     depth = v
                 }
                 PARAM_THINKING_TIME -> {
                     val v = (value as? Number)?.toInt()
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_THINKING_TIME must be an integer"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_THINKING_TIME))
                     if (v !in 1..100) {
-                        return Result.Failure(EngineError.InvalidParams("$PARAM_THINKING_TIME must be between 1 and 100"))
+                        return Result.Failure(EngineError.InvalidParams(PARAM_THINKING_TIME))
                     }
                     maxThinkingTimeMs = v
                 }
-                else -> return Result.Failure(EngineError.InvalidParams("Unknown parameter: $key"))
+                else -> return Result.Failure(EngineError.InvalidParams(key))
             }
         }
         configured = true
@@ -97,7 +97,7 @@ class RemoteStockfishAdapter(
         val moves = params.moves
         val fen = if (!moves.isNullOrEmpty()) {
             applyMoves(params.fen, moves)
-                ?: return Result.Failure(EngineError.InvalidPosition("Failed to replay moves from FEN"))
+                ?: return Result.Failure(EngineError.InvalidPosition(diagnostic = "could not replay the moves from the given FEN"))
         } else {
             params.fen
         }
@@ -116,7 +116,7 @@ class RemoteStockfishAdapter(
 
             val move = response.optString("move", "")
             if (move.isEmpty()) {
-                return Result.Failure(EngineError.InvalidPosition("API returned no move"))
+                return Result.Failure(EngineError.InvalidPosition(diagnostic = "the API returned no move for this position"))
             }
 
             val score = parseScore(response)
@@ -135,13 +135,13 @@ class RemoteStockfishAdapter(
         } catch (e: Exception) {
             val message = "API request failed: ${e.message}"
             _errors.tryEmit(EngineErrorEvent("ENGINE_CRASHED", message))
-            Result.Failure(EngineError.EngineCrashed(message))
+            Result.Failure(EngineError.EngineCrashed(diagnostic = message))
         }
     }
 
     override suspend fun stop(): Result<EngineError, Unit> {
         // Remote API doesn't support stopping mid-search; requests are short-lived.
-        return Result.Failure(EngineError.EngineCrashed("Cannot stop remote API request"))
+        return Result.Failure(EngineError.EngineCrashed(diagnostic = "a remote API request cannot be stopped once issued"))
     }
 
     override suspend fun newGame(): Result<EngineError, Unit> {

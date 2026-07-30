@@ -56,11 +56,42 @@ data class RemoteGameEndedEvent(
     val termination: Termination,
 )
 
-sealed class RemoteError(override val code: String, override val message: String) : ModuleError {
-    class AuthFailed(message: String = "Authentication failed") : RemoteError("AUTH_FAILED", message)
-    class InvalidParams(message: String = "Invalid parameters") : RemoteError("INVALID_PARAMS", message)
-    class NotConnected(message: String = "Not connected") : RemoteError("NOT_CONNECTED", message)
-    class PlatformError(message: String = "Platform error") : RemoteError("PLATFORM_ERROR", message)
+sealed class RemoteError(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError {
+    class AuthFailed : RemoteError("AUTH_FAILED")
+
+    /** [parameter] is the descriptor's name, so a UI can point at the field. */
+    class InvalidParams(val parameter: String? = null) : RemoteError("INVALID_PARAMS")
+
+    class NotConnected : RemoteError("NOT_CONNECTED")
+
+    /** No game is in progress on the platform, so there is nothing to act on. */
+    class NoActiveGame : RemoteError("NO_ACTIVE_GAME")
+
+    /**
+     * The platform answered, and its answer was no.
+     *
+     * [serverText] is the platform's own words. It is the one kind of text §2.6 lets a UI show as
+     * it stands, because we neither own that vocabulary nor can enumerate it - so it is a field of
+     * its own rather than a [diagnostic], which a UI must not display.
+     */
+    class PlatformError(
+        val statusCode: Int? = null,
+        val serverText: String? = null,
+    ) : RemoteError("PLATFORM_ERROR")
+
+    /**
+     * The platform could not be reached at all.
+     *
+     * Distinct from [PlatformError] because the difference is the player's: a server that refused
+     * something is not a network that is down.
+     */
+    class Unreachable(diagnostic: String? = null) : RemoteError("UNREACHABLE", diagnostic)
 }
 
-data class RemoteErrorEvent(override val code: String, override val message: String) : ModuleError
+data class RemoteErrorEvent(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError

@@ -13,10 +13,27 @@ data class BoardCapabilities(val level: BoardCapabilityLevel)
 
 data class BoardState(val squares: Map<String, SquareState>)
 
-sealed class BoardError(override val code: String, override val message: String) : ModuleError {
-    class Disconnected(message: String = "Board disconnected") : BoardError("DISCONNECTED", message)
-    class SensorFailure(message: String = "Sensor failure") : BoardError("SENSOR_FAILURE", message)
-    class NotReady(message: String = "Board not ready") : BoardError("NOT_READY", message)
+sealed class BoardError(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError {
+    class Disconnected(diagnostic: String? = null) : BoardError("DISCONNECTED", diagnostic)
+
+    /**
+     * The board's reading could not be trusted.
+     *
+     * [unreadableSquares] names the squares at fault, so a UI can tell the player where to look.
+     * A board module that cannot narrow it down leaves the list empty.
+     */
+    class SensorFailure(
+        val unreadableSquares: List<String> = emptyList(),
+        diagnostic: String? = null,
+    ) : BoardError("SENSOR_FAILURE", diagnostic)
+
+    class NotReady(diagnostic: String? = null) : BoardError("NOT_READY", diagnostic)
 }
 
-data class BoardErrorEvent(override val code: String, override val message: String) : ModuleError
+data class BoardErrorEvent(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError

@@ -8,9 +8,12 @@ internal suspend fun Orchestrator.handleMoveReady() {
     val s = session ?: return
     val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
-    val boardState = board.getState().getOrNull() ?: run {
-        ui.displayError(UIMessage.BoardReadFailed)
-        return
+    val boardState = when (val read = board.getState()) {
+        is Result.Failure -> {
+            ui.displayError(UIMessage.BoardReadFailed(read.error))
+            return
+        }
+        is Result.Success -> read.value
     }
 
     val outcome = inferMove(gameState.fen, boardState, s.boardLevel)
@@ -77,7 +80,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
 
     when (bestMove) {
         is Result.Failure -> {
-            debugLog("[orchestrator] Engine returned error: ${bestMove.error.code}: ${bestMove.error.message}")
+            debugLog("[orchestrator] Engine returned error: ${bestMove.error.code} ${bestMove.error.diagnostic.orEmpty()}")
             ui.displayError(UIMessage.EngineFailed(bestMove.error))
             return
         }
@@ -87,7 +90,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
             val submitResult = gameController.submitMove(SubmitMoveParams(gameId = s.gameId, move = moveUci))
             when (submitResult) {
                 is Result.Failure -> {
-                    debugLog("[orchestrator] Engine move REJECTED: move=$moveUci fen=${gameState.fen} error=${submitResult.error.message}")
+                    debugLog("[orchestrator] Engine move REJECTED: move=$moveUci fen=${gameState.fen} error=${submitResult.error.code}")
                     ui.displayError(UIMessage.EngineMoveRejected(submitResult.error))
                     return
                 }

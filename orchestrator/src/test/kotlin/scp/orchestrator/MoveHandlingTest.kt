@@ -171,10 +171,10 @@ class MoveHandlingTest {
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
             BoardCapabilityLevel.FULL,
         )
-        gc.submitMoveFail = GameError.IllegalMove("Not your turn")
+        gc.submitMoveFail = GameError.NotYourTurn()
         ui.emitMoveReady(gameId)
 
-        assertEquals("ILLEGAL_MOVE", assertIs<UIMessage.MoveRejected>(ui.lastError).error.code)
+        assertEquals("NOT_YOUR_TURN", assertIs<UIMessage.MoveRejected>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -188,7 +188,7 @@ class MoveHandlingTest {
         board.failWith = BoardError.SensorFailure()
         ui.emitMoveReady(gameId)
 
-        assertEquals(UIMessage.BoardReadFailed, ui.lastError)
+        assertEquals("SENSOR_FAILURE", assertIs<UIMessage.BoardReadFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -265,7 +265,7 @@ class MoveHandlingTest {
             EngineGameConfig(playerColor = Color.BLACK, engineSettings = emptyMap(), timeControl = null)
         )
         engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e2e4"))
-        gc.submitMoveFail = GameError.IllegalMove("Invalid engine move")
+        gc.submitMoveFail = GameError.IllegalMove("e2e5")
         ui.emitNewGameRequested()
 
         assertEquals("ILLEGAL_MOVE", assertIs<UIMessage.EngineMoveRejected>(ui.lastError).error.code)

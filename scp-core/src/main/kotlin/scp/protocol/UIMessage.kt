@@ -17,8 +17,14 @@ sealed interface UIMessage {
 
     // -- The board --
 
-    /** The board could not be read at all. */
-    data object BoardReadFailed : UIMessage {
+    /**
+     * The board could not be read.
+     *
+     * Carries the board's error, so a UI can be specific where the board was: a sensor failure
+     * names the squares it could not trust, and telling the player which ones to re-seat is worth
+     * more than telling them the read failed.
+     */
+    data class BoardReadFailed(val error: ModuleError) : UIMessage {
         override val code = "BOARD_READ_FAILED"
     }
 

@@ -141,8 +141,8 @@ class RemoteStockfishAdapterTest {
         withServer {
             val result = adapter.configure(mapOf("Threads" to 4))
             val error = assertIs<Result.Failure<EngineError>>(result).error
-            assertIs<EngineError.InvalidParams>(error)
-            assertTrue(error.message.contains("Unknown parameter"))
+            // The parameter is named rather than described, so a UI can point at the field.
+            assertEquals("Threads", assertIs<EngineError.InvalidParams>(error).parameter)
         }
     }
 
@@ -243,8 +243,8 @@ class RemoteStockfishAdapterTest {
 
             val result = adapter.getBestMove(GetBestMoveParams(fen = "some-fen"))
             val error = assertIs<Result.Failure<EngineError>>(result).error
-            assertIs<EngineError.EngineCrashed>(error)
-            assertTrue(error.message.contains("500"))
+            // The status is developer-facing detail, not an explanation for the player.
+            assertTrue(assertIs<EngineError.EngineCrashed>(error).diagnostic!!.contains("500"))
         }
     }
 

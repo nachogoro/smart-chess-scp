@@ -77,15 +77,28 @@ data class GameHistoryMove(
     val timestamp: String,
 )
 
-sealed class GameError(override val code: String, override val message: String) : ModuleError {
-    class IllegalMove(message: String = "Illegal move") : GameError("ILLEGAL_MOVE", message)
-    class GameNotFound(message: String = "Game not found") : GameError("GAME_NOT_FOUND", message)
-    class GameOver(message: String = "Game is over") : GameError("GAME_OVER", message)
-    class NotYourTurn(message: String = "Not your turn") : GameError("NOT_YOUR_TURN", message)
-    class InvalidClaim(message: String = "Invalid draw claim") : GameError("INVALID_CLAIM", message)
-    class NoDrawOffer(message: String = "No draw offer to respond to") : GameError("NO_DRAW_OFFER", message)
-    class ExternalAuthority(message: String = "Draw claims not allowed in external authority mode") : GameError("EXTERNAL_AUTHORITY", message)
-    class InvalidAuthority(message: String = "Game was not created with external authority") : GameError("INVALID_AUTHORITY", message)
+sealed class GameError(
+    override val code: String,
+    override val diagnostic: String? = null,
+) : ModuleError {
+    /** [move] is the UCI that was refused, where the caller supplied one. */
+    class IllegalMove(val move: String? = null) : GameError("ILLEGAL_MOVE")
+
+    /**
+     * A position could not be read.
+     *
+     * Its own code rather than [IllegalMove]: setting a game up from a malformed FEN is not a move
+     * at all, and reporting it as one left a UI unable to tell the two apart.
+     */
+    class InvalidFen(val fen: String? = null) : GameError("INVALID_FEN")
+
+    class GameNotFound : GameError("GAME_NOT_FOUND")
+    class GameOver : GameError("GAME_OVER")
+    class NotYourTurn : GameError("NOT_YOUR_TURN")
+    class InvalidClaim : GameError("INVALID_CLAIM")
+    class NoDrawOffer : GameError("NO_DRAW_OFFER")
+    class ExternalAuthority : GameError("EXTERNAL_AUTHORITY")
+    class InvalidAuthority : GameError("INVALID_AUTHORITY")
 }
 
 data class GameEndedEvent(

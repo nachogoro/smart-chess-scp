@@ -188,7 +188,7 @@ class GameLifecycleTest {
 
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
-        board.emitError(BoardErrorEvent(code = "SENSOR_FAILURE", message = "Sensor malfunction"))
+        board.emitError(BoardErrorEvent(code = "SENSOR_FAILURE", diagnostic = "sensor malfunction"))
 
         assertEquals("SENSOR_FAILURE", assertIs<UIMessage.BoardFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
@@ -200,7 +200,7 @@ class GameLifecycleTest {
     fun `engine error during game shows error and stays in state`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startEngineGame(playerColor = Color.WHITE)
 
-        engine.emitError(EngineErrorEvent(code = "ENGINE_CRASHED", message = "Engine process died"))
+        engine.emitError(EngineErrorEvent(code = "ENGINE_CRASHED", diagnostic = "engine process died"))
 
         assertEquals("ENGINE_CRASHED", assertIs<UIMessage.EngineFailed>(ui.lastError).error.code)
 
@@ -213,7 +213,7 @@ class GameLifecycleTest {
 
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
-        remote.emitError(RemoteErrorEvent(code = "CONNECTION_LOST", message = "Connection lost"))
+        remote.emitError(RemoteErrorEvent(code = "CONNECTION_LOST", diagnostic = "connection lost"))
 
         assertEquals("CONNECTION_LOST", assertIs<UIMessage.RemoteFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)

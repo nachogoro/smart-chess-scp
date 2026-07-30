@@ -41,7 +41,7 @@ class GameController(
         }
 
         val chessGame = chessResult.getOrNull()
-            ?: return Result.Failure(GameError.IllegalMove("Invalid FEN: $fen"))
+            ?: return Result.Failure(GameError.InvalidFen(fen))
 
         val id = UUID.randomUUID().toString()
         val game = InternalGame(
@@ -81,7 +81,7 @@ class GameController(
         }
 
         val legalMove = parseUciMove(params.move, game.chessGame)
-            ?: return Result.Failure(GameError.IllegalMove("Illegal move: ${params.move}"))
+            ?: return Result.Failure(GameError.IllegalMove(params.move))
 
         // Determined before the move is applied: afterwards the vacated square is indistinguishable
         // from one that never held a piece. A pawn only ever leaves its file to capture, so a
@@ -92,7 +92,7 @@ class GameController(
 
         val moveResult = game.chessGame.makeMove(legalMove)
         val gameAfterMove = moveResult.getOrNull()
-            ?: return Result.Failure(GameError.IllegalMove("Illegal move: ${params.move}"))
+            ?: return Result.Failure(GameError.IllegalMove(params.move))
 
         // Get SAN from the last played move in the new game's history
         val playedMove = gameAfterMove.history.last().second
@@ -215,7 +215,7 @@ class GameController(
         val claimReason = chessGame.drawClaimReason
         val drawResult = chessGame.claimDraw()
         val newChessGame = drawResult.getOrNull()
-            ?: return Result.Failure(GameError.InvalidClaim("Draw claim failed"))
+            ?: return Result.Failure(GameError.InvalidClaim())
 
         game.timerJob?.cancel()
         game.chessGame = newChessGame

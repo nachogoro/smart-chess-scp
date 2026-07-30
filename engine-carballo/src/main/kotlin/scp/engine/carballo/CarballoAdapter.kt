@@ -93,29 +93,29 @@ class CarballoAdapter : EngineAdapterModule {
             when (key) {
                 PARAM_LIMIT_STRENGTH -> {
                     limitStrength = value as? Boolean
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_LIMIT_STRENGTH must be a boolean"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_LIMIT_STRENGTH))
                 }
                 PARAM_ELO -> {
                     val v = (value as? Number)?.toInt()
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_ELO must be an integer"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_ELO))
                     if (v !in MIN_ELO..MAX_ELO) {
-                        return Result.Failure(EngineError.InvalidParams("$PARAM_ELO must be between $MIN_ELO and $MAX_ELO"))
+                        return Result.Failure(EngineError.InvalidParams(PARAM_ELO))
                     }
                     elo = v
                 }
                 PARAM_HASH -> {
                     val v = (value as? Number)?.toInt()
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_HASH must be an integer"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_HASH))
                     if (v !in 1..256) {
-                        return Result.Failure(EngineError.InvalidParams("$PARAM_HASH must be between 1 and 256"))
+                        return Result.Failure(EngineError.InvalidParams(PARAM_HASH))
                     }
                     hashSizeMb = v
                 }
                 PARAM_USE_BOOK -> {
                     useBook = value as? Boolean
-                        ?: return Result.Failure(EngineError.InvalidParams("$PARAM_USE_BOOK must be a boolean"))
+                        ?: return Result.Failure(EngineError.InvalidParams(PARAM_USE_BOOK))
                 }
-                else -> return Result.Failure(EngineError.InvalidParams("Unknown parameter: $key"))
+                else -> return Result.Failure(EngineError.InvalidParams(key))
             }
         }
 
@@ -161,7 +161,7 @@ class CarballoAdapter : EngineAdapterModule {
                 val bestMove = eng.bestMove
                 if (bestMove == 0) {
                     debugLog("getBestMove: no legal moves found")
-                    return@withContext Result.Failure(EngineError.InvalidPosition("No legal moves"))
+                    return@withContext Result.Failure(EngineError.InvalidPosition())
                 }
 
                 val moveString = Move.toString(bestMove)
@@ -186,7 +186,7 @@ class CarballoAdapter : EngineAdapterModule {
         } catch (e: Exception) {
             val message = "Engine error: ${e.message}"
             _errors.tryEmit(EngineErrorEvent("ENGINE_CRASHED", message))
-            Result.Failure(EngineError.EngineCrashed(message))
+            Result.Failure(EngineError.EngineCrashed(diagnostic = message))
         }
     }
 
