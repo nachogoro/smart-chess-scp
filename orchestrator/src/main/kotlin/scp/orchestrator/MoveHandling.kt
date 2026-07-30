@@ -97,6 +97,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
                         san = submitResult.value.san,
                         fen = submitResult.value.fen,
                         clocks = submitResult.value.clocks,
+                        isEnPassant = submitResult.value.isEnPassant,
                     ))
                     transitionToAwaitingMove()
                 }
@@ -124,6 +125,7 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
                 san = submitResult.value.san,
                 fen = submitResult.value.fen,
                 clocks = submitResult.value.clocks,
+                isEnPassant = submitResult.value.isEnPassant,
             ))
             transitionToAwaitingMove()
         }

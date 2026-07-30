@@ -71,6 +71,8 @@ data class ShowOpponentMoveParams(
     val san: String,
     val fen: String,
     val clocks: Clocks?,
+    /** See [SubmitMoveResult.isEnPassant]: the player must clear a square the move does not name. */
+    val isEnPassant: Boolean = false,
 )
 
 sealed class UIError(val code: String, val message: String) {

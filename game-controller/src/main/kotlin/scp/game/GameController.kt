@@ -4,6 +4,7 @@ import com.nachogoro.simplechess.DrawEnforcement
 import com.nachogoro.simplechess.DrawReason
 import com.nachogoro.simplechess.GameState as ChessGameState
 import com.nachogoro.simplechess.Game as ChessGame
+import com.nachogoro.simplechess.PieceType as ChessPieceType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -82,6 +83,13 @@ class GameController(
         val legalMove = parseUciMove(params.move, game.chessGame)
             ?: return Result.Failure(GameError.IllegalMove("Illegal move: ${params.move}"))
 
+        // Determined before the move is applied: afterwards the vacated square is indistinguishable
+        // from one that never held a piece. A pawn only ever leaves its file to capture, so a
+        // diagonal pawn move onto an empty square is en passant and nothing else.
+        val isEnPassant = legalMove.piece.type == ChessPieceType.PAWN
+            && legalMove.from.file != legalMove.to.file
+            && game.chessGame.currentPosition.board[legalMove.to] == null
+
         val moveResult = game.chessGame.makeMove(legalMove)
         val gameAfterMove = moveResult.getOrNull()
             ?: return Result.Failure(GameError.IllegalMove("Illegal move: ${params.move}"))
@@ -130,6 +138,7 @@ class GameController(
                 san = san,
                 status = game.status,
                 clocks = game.clocks,
+                isEnPassant = isEnPassant,
             )
         )
     }

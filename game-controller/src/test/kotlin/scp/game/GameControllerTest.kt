@@ -117,6 +117,29 @@ class GameControllerTest {
     }
 
     @Test
+    fun `submitMove flags en passant captures`() = runTest {
+        val gc = GameController(backgroundScope)
+        // Black has just played d7d5; White's pawn on e5 can take it in passing.
+        val gameId = createGame(gc, fen = "rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3")
+
+        val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e5d6"))
+        assertIs<Result.Success<SubmitMoveResult>>(result)
+        assertEquals("exd6", result.value.san)
+        assertTrue(result.value.isEnPassant)
+    }
+
+    @Test
+    fun `submitMove does not flag ordinary pawn captures as en passant`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc, fen = "rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2")
+
+        val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e4d5"))
+        assertIs<Result.Success<SubmitMoveResult>>(result)
+        assertEquals("exd5", result.value.san)
+        assertFalse(result.value.isEnPassant)
+    }
+
+    @Test
     fun `submitMove detects checkmate`() = runTest {
         val gc = GameController(backgroundScope)
         val gameId = createGame(gc)

@@ -50,6 +50,14 @@ data class SubmitMoveResult(
     val san: String,
     val status: GameStatus,
     val clocks: Clocks?,
+    /**
+     * Whether the move was an en passant capture.
+     *
+     * Not derivable from [san] and [fen] alone - `exd6` looks the same either way - and a UI
+     * driving a physical board needs it, because the captured pawn stands on a square the move
+     * never names.
+     */
+    val isEnPassant: Boolean = false,
 )
 
 data class SetResultParams(
