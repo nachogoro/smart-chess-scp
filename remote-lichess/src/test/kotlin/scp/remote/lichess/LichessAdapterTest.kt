@@ -191,7 +191,10 @@ class LichessAdapterTest {
 
         val result = adapter.seekGame(mapOf("time" to 5))
         assertIs<Result.Failure<RemoteError>>(result)
-        assertIs<RemoteError.InvalidParams>(result.error)
+        val error = assertIs<RemoteError.InvalidParams>(result.error)
+        // The field, not a sentence about it: the UI points at what the player filled in, and
+        // words the constraint from the descriptor's own minimum (PROTOCOL.md 2.6, 7.2).
+        assertEquals("time", error.parameter)
 
         adapter.disconnect()
     }

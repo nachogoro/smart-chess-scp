@@ -10,6 +10,18 @@ import scp.protocol.*
 private const val STANDARD_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 private const val MIN_SEEK_TIME_MINUTES = 10
 
+
+// The names the seek parameters are advertised under. Referenced from the descriptors, from the
+// settings map they come back in, and from the error naming one of them, so they are declared once.
+private const val PARAM_API_TOKEN = "api_token"
+private const val PARAM_OPPONENT_TYPE = "opponent_type"
+private const val PARAM_OPPONENT_NAME = "opponent_name"
+private const val PARAM_AI_LEVEL = "ai_level"
+private const val PARAM_TIME = "time"
+private const val PARAM_INCREMENT = "increment"
+private const val PARAM_RATED = "rated"
+private const val PARAM_COLOR = "color"
+
 /** Room for a burst of stream events so emitting never blocks on a collector. */
 private const val EVENT_BUFFER = 16
 
@@ -107,7 +119,7 @@ class LichessAdapter(
                 features = listOf("rated", "casual"),
                 parameters = listOf(
                     ParameterDescriptor(
-                        name = "api_token",
+                        name = PARAM_API_TOKEN,
                         type = ParameterType.STRING,
                         description = "Lichess API token (scopes: board:play, challenge:write for AI)",
                         required = true,
@@ -116,30 +128,30 @@ class LichessAdapter(
                 ),
                 seekParameters = listOf(
                     ParameterDescriptor(
-                        name = "opponent_type",
+                        name = PARAM_OPPONENT_TYPE,
                         type = ParameterType.COMBO,
                         description = "Type of opponent",
                         default = "Random opponent",
                         options = listOf("Random opponent", "Friend", "Engine"),
                     ),
                     ParameterDescriptor(
-                        name = "opponent_name",
+                        name = PARAM_OPPONENT_NAME,
                         type = ParameterType.STRING,
                         description = "Lichess username to challenge",
                         required = true,
-                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "Friend"),
+                        visibleWhen = VisibleWhen(field = PARAM_OPPONENT_TYPE, equals = "Friend"),
                     ),
                     ParameterDescriptor(
-                        name = "ai_level",
+                        name = PARAM_AI_LEVEL,
                         type = ParameterType.SPIN,
                         description = "Stockfish level (1-8)",
                         min = 1,
                         max = 8,
                         default = 4,
-                        visibleWhen = VisibleWhen(field = "opponent_type", equals = "Engine"),
+                        visibleWhen = VisibleWhen(field = PARAM_OPPONENT_TYPE, equals = "Engine"),
                     ),
                     ParameterDescriptor(
-                        name = "time",
+                        name = PARAM_TIME,
                         type = ParameterType.SPIN,
                         description = "Initial time in minutes (min 10)",
                         default = 15,
@@ -147,7 +159,7 @@ class LichessAdapter(
                         max = 180,
                     ),
                     ParameterDescriptor(
-                        name = "increment",
+                        name = PARAM_INCREMENT,
                         type = ParameterType.SPIN,
                         description = "Increment per move in seconds",
                         default = 10,
@@ -155,14 +167,14 @@ class LichessAdapter(
                         max = 180,
                     ),
                     ParameterDescriptor(
-                        name = "rated",
+                        name = PARAM_RATED,
                         type = ParameterType.CHECK,
                         description = "Play a rated game",
                         default = false,
-                        visibleWhen = VisibleWhen(field = "opponent_type", oneOf = listOf("Random opponent", "Friend")),
+                        visibleWhen = VisibleWhen(field = PARAM_OPPONENT_TYPE, oneOf = listOf("Random opponent", "Friend")),
                     ),
                     ParameterDescriptor(
-                        name = "color",
+                        name = PARAM_COLOR,
                         type = ParameterType.COMBO,
                         description = "Your color",
                         default = "Random",
@@ -183,7 +195,7 @@ class LichessAdapter(
      *   `challenge:write` is also needed for AI challenges).
      */
     override suspend fun configure(settings: Map<String, Any>): Result<RemoteError, ConfigureResult> {
-        val apiToken = settings["api_token"] as? String
+        val apiToken = settings[PARAM_API_TOKEN] as? String
             ?: return Result.Failure(RemoteError.InvalidParams("api_token"))
 
         val account = try {
@@ -226,25 +238,24 @@ class LichessAdapter(
     override suspend fun seekGame(settings: Map<String, Any>): Result<RemoteError, Unit> {
         val t = token ?: return Result.Failure(RemoteError.NotConnected())
 
-        val opponentType = settings["opponent_type"] as? String ?: "random"
-        val time = (settings["time"] as? Number)?.toInt() ?: 15
-        val increment = (settings["increment"] as? Number)?.toInt() ?: 10
-        val rated = settings["rated"] as? Boolean ?: false
-        val color = (settings["color"] as? String)?.lowercase() ?: "random"
+        val opponentType = settings[PARAM_OPPONENT_TYPE] as? String ?: "random"
+        val time = (settings[PARAM_TIME] as? Number)?.toInt() ?: 15
+        val increment = (settings[PARAM_INCREMENT] as? Number)?.toInt() ?: 10
+        val rated = settings[PARAM_RATED] as? Boolean ?: false
+        val color = (settings[PARAM_COLOR] as? String)?.lowercase() ?: "random"
 
+        // Names the field, and only the field. What is wrong with the value is not carried: the
+        // UI rendered it from a descriptor that already declares the minimum, and a sentence
+        // written here would be one this module has no business choosing a language for (§2.6).
         if (time < MIN_SEEK_TIME_MINUTES) {
-            return Result.Failure(
-                RemoteError.InvalidParams(
-                    "Minimum time is $MIN_SEEK_TIME_MINUTES minutes (Lichess Board API only supports Rapid and Classical)"
-                )
-            )
+            return Result.Failure(RemoteError.InvalidParams(PARAM_TIME))
         }
 
         awaitingGame = true
 
         when (opponentType) {
             "Engine" -> {
-                val level = (settings["ai_level"] as? Number)?.toInt() ?: 4
+                val level = (settings[PARAM_AI_LEVEL] as? Number)?.toInt() ?: 4
                 try {
                     api.challengeAi(t, level, time, increment, color)
                 } catch (e: Exception) {
@@ -257,7 +268,7 @@ class LichessAdapter(
                     try {
                         val stream = when (opponentType) {
                             "Friend" -> {
-                                val opponent = settings["opponent_name"] as? String
+                                val opponent = settings[PARAM_OPPONENT_NAME] as? String
                                     ?: return@launch _errors.emit(
                                         RemoteErrorEvent("INVALID_PARAMS", diagnostic = "opponent_name is required for friend challenges")
                                     )
