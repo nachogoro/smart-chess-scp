@@ -93,12 +93,6 @@ class GameController(
             return Result.Failure(GameError.NotYourTurn())
         }
 
-        // Clear any pending draw offer on move submission
-        if (game.status == GameStatus.DRAW_OFFERED) {
-            game.drawOffer = null
-            game.status = GameStatus.IN_PROGRESS
-        }
-
         val legalMove = parseUciMove(params.move, game.chessGame)
             ?: return Result.Failure(GameError.IllegalMove(params.move))
 
@@ -123,6 +117,13 @@ class GameController(
 
         game.chessGame = gameAfterMove
         game.clocks = newClocks
+
+        // A move answers a draw offer by ignoring it - but only a move that was actually played.
+        // Withdrawing the offer up front meant a move the rules engine went on to refuse, which
+        // here means any misread of the physical board, silently took the opponent's offer with
+        // it. The status is set from the new position just below, so clearing who offered is all
+        // that is left to do.
+        game.drawOffer = null
 
         // Determine new status
         val newStatus = determineStatusAfterMove(gameAfterMove, game.authority)

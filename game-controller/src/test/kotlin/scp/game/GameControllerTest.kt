@@ -531,6 +531,35 @@ class GameControllerTest {
         assertIs<GameError.IllegalMove>(assertIs<Result.Failure<GameError>>(result).error)
     }
 
+    @Test
+    fun `a refused move leaves a pending draw offer standing`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc)
+        gc.offerDraw(gameId, Color.WHITE)
+
+        // Any misread of the physical board arrives here as an illegal move.
+        assertIs<Result.Failure<GameError>>(gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e5")))
+
+        val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+        assertEquals(GameStatus.DRAW_OFFERED, state.status, "the offer was not the move's to withdraw")
+    }
+
+    @Test
+    fun `a played move answers a draw offer by ignoring it`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc)
+        gc.offerDraw(gameId, Color.BLACK)
+
+        assertIs<Result.Success<SubmitMoveResult>>(gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4")))
+
+        val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+        assertEquals(GameStatus.IN_PROGRESS, state.status)
+        // And the offer is gone, so responding to it now is not possible.
+        assertIs<GameError.NoDrawOffer>(
+            assertIs<Result.Failure<GameError>>(gc.respondDraw(gameId, accept = true)).error
+        )
+    }
+
     // -- Clock management --
 
     @Test
