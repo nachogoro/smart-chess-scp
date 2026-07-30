@@ -1,7 +1,10 @@
 package scp.remote.lichess
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -24,6 +27,18 @@ private const val PARAM_COLOR = "color"
 
 /** Room for a burst of stream events so emitting never blocks on a collector. */
 private const val EVENT_BUFFER = 16
+
+private const val RETRY_BASE_MS = 1_000L
+private const val RETRY_MAX_MS = 30_000L
+
+/**
+ * How long to wait before reopening a stream that has dropped [failures] times running.
+ *
+ * Backs off so that a platform that is down is not hammered, and caps so that a connection that
+ * comes back is picked up within half a minute rather than eventually.
+ */
+internal fun retryDelayMs(failures: Int): Long =
+    (RETRY_BASE_MS shl (failures - 1).coerceIn(0, 16)).coerceAtMost(RETRY_MAX_MS)
 
 private fun debugLog(msg: String) = scp.protocol.debugLog("[lichess] $msg")
 
@@ -79,6 +94,9 @@ class LichessAdapter(
      * which [handleGameFull] otherwise takes care to support.
      */
     private var firstMover: Color = Color.WHITE
+
+    /** The game whose start has already been announced, so a reconnect is not mistaken for one. */
+    private var announcedGameId: String? = null
 
     private var eventStreamJob: Job? = null
     private var seekJob: Job? = null
@@ -380,6 +398,7 @@ class LichessAdapter(
         gameStreamJob = null
         eventStreamJob = null
         currentGameId = null
+        announcedGameId = null
         myColor = null
         token = null
         user = null
@@ -388,21 +407,36 @@ class LichessAdapter(
 
     // -- Event stream handling --
 
-    /** Launches a coroutine that collects the account-wide event stream. */
+    /**
+     * Launches a coroutine that collects the account-wide event stream, reopening it when it drops.
+     *
+     * Lichess holds this connection open for the session, so losing it means losing every game
+     * start until something opens it again - and nothing did. It is retried until [disconnect]
+     * cancels the job.
+     */
     private fun startEventStream() {
         val t = token ?: return
         eventStreamJob?.cancel()
         debugLog("Starting event stream")
         eventStreamJob = scope.launch {
-            try {
-                api.streamEvents(t).collect { line ->
-                    debugLog("Event stream line: $line")
-                    handleEventStreamLine(line)
+            var failures = 0
+            while (isActive && token != null) {
+                try {
+                    api.streamEvents(t).collect { line ->
+                        debugLog("Event stream line: $line")
+                        failures = 0
+                        handleEventStreamLine(line)
+                    }
+                    debugLog("Event stream ended normally")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    debugLog("Event stream error: ${e::class.simpleName}: ${e.message}")
+                    _errors.emit(RemoteError.ConnectionLost("event stream lost: ${e.message}"))
                 }
-                debugLog("Event stream ended normally")
-            } catch (e: Exception) {
-                debugLog("Event stream error: ${e::class.simpleName}: ${e.message}")
-                _errors.emit(RemoteError.ConnectionLost("event stream lost: ${e.message}"))
+                if (!isActive || token == null) return@launch
+                delay(retryDelayMs(++failures))
+                debugLog("Reopening event stream (attempt $failures)")
             }
         }
     }
@@ -456,23 +490,43 @@ class LichessAdapter(
 
     // -- Game stream handling --
 
-    /** Launches a coroutine that collects the game stream for the given game. */
+    /**
+     * Launches a coroutine that collects the game stream, reopening it until the game is over.
+     *
+     * Reconnecting is also how the game is reconciled. Lichess replays the whole move list in the
+     * `gameFull` that opens every stream, and [lastKnownMoveCount] deliberately survives the drop,
+     * so the diff in [handleGameState] emits exactly the moves played while the connection was
+     * down - which is what §7.5 asks for, and what a UI needs to catch the board up.
+     */
     private fun startGameStream(gameId: String) {
         val t = token ?: return
         gameStreamJob?.cancel()
         lastKnownMoveCount = 0
+        announcedGameId = null
         debugLog("Starting game stream for $gameId")
 
         gameStreamJob = scope.launch {
-            try {
-                api.streamGame(t, gameId).collect { line ->
-                    debugLog("Game stream line: $line")
-                    handleGameStreamLine(line)
+            var failures = 0
+            while (isActive && currentGameId == gameId) {
+                try {
+                    api.streamGame(t, gameId).collect { line ->
+                        debugLog("Game stream line: $line")
+                        failures = 0
+                        handleGameStreamLine(line)
+                    }
+                    debugLog("Game stream ended normally for $gameId")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    debugLog("Game stream error for $gameId: ${e::class.simpleName}: ${e.message}")
+                    if (currentGameId == gameId) {
+                        _errors.emit(RemoteError.ConnectionLost("game stream lost: ${e.message}"))
+                    }
                 }
-                debugLog("Game stream ended normally for $gameId")
-            } catch (e: Exception) {
-                debugLog("Game stream error for $gameId: ${e::class.simpleName}: ${e.message}")
-                _errors.emit(RemoteError.ConnectionLost("game stream lost: ${e.message}"))
+                // The game ending clears currentGameId, which is what ends this loop.
+                if (!isActive || currentGameId != gameId) return@launch
+                delay(retryDelayMs(++failures))
+                debugLog("Reopening game stream for $gameId (attempt $failures)")
             }
         }
     }
@@ -522,6 +576,16 @@ class LichessAdapter(
 
         val fen = if (game.initialFen == "startpos") STANDARD_FEN else game.initialFen
         firstMover = activeColorOf(fen)
+
+        // Every stream opens with a gameFull, including the ones opened to replace a dropped
+        // connection. Announcing that again would look like a second game starting, and the
+        // orchestrator would set one up over the top of the game still being played.
+        if (announcedGameId == game.id) {
+            debugLog("handleGameFull: reconnected to ${game.id}, catching up from move $lastKnownMoveCount")
+            handleGameState(game.state)
+            return
+        }
+        announcedGameId = game.id
 
         val timeControl = game.clock?.let {
             TimeControl(
@@ -605,8 +669,9 @@ class LichessAdapter(
             val result = mapLichessResult(state.status, state.winner, color)
             val termination = mapLichessTermination(state.status)
             debugLog("Game ended: status=${state.status} winner=${state.winner} result=$result termination=${termination.code}")
+            // Clearing this is what stops the reconnect loop. Cancelling the job from inside the
+            // coroutine running it would have left the emission below in a cancelled coroutine.
             currentGameId = null
-            gameStreamJob?.cancel()
             _gameEnded.emit(RemoteGameEndedEvent(result = result, termination = termination))
             return
         }

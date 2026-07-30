@@ -1,6 +1,7 @@
 package scp.remote.lichess
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -740,6 +741,87 @@ class LichessAdapterTest {
         // A body Lichess did not phrase for a person is not passed off as its wording.
         assertNull(LichessApiException(503, "").serverText())
         assertEquals("Not your turn", LichessApiException(400, """{"error":"Not your turn"}""").serverText())
+    }
+
+    // -- Losing the connection --
+
+    @Test
+    fun `moves played while the connection was down arrive on reconnect`() = runTest {
+        // PROTOCOL.md 7.5: moves that happened during a disconnection must be applied. Nothing
+        // reopened a dropped stream at all before, so a blip mid-game meant the board stopped
+        // hearing about the game for good.
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        val moves = mutableListOf<OpponentMoveEvent>()
+        val errors = mutableListOf<RemoteError>()
+        val collectors = listOf(
+            launch { adapter.opponentMove.collect { moves.add(it) } },
+            launch { adapter.errors.collect { errors.add(it) } },
+        )
+        val starts = mutableListOf<GameStartedEvent>()
+        val startJob = launch { adapter.gameStarted.collect { starts.add(it) } }
+
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        // We are white. The opponent replies, and then the connection drops.
+        api.gameStreamChannel.send(gameState(moves = "e2e4 e7e5"))
+        advanceUntilIdle()
+        assertEquals(listOf("e7e5"), moves.map { it.move })
+
+        // Drop the connection, and have a fresh stream ready for the reconnect to open - as a
+        // real one gets a new response rather than the one that just failed.
+        val reconnected = Channel<String>(Channel.UNLIMITED)
+        api.gameStreamChannel.close(java.io.IOException("connection reset"))
+        api.gameStreamChannel = reconnected
+        advanceUntilIdle()
+
+        assertTrue(errors.any { it is RemoteError.ConnectionLost }, "the drop should be reported")
+        assertEquals(2, api.gameStreamOpens, "the stream should have been reopened")
+
+        // Every stream opens with the whole game so far, including what happened while we were away.
+        reconnected.send(gameFull(moves = "e2e4 e7e5 g1f3 b8c6"))
+        advanceUntilIdle()
+
+        assertEquals(listOf("e7e5", "b8c6"), moves.map { it.move }, "the missed move is delivered")
+        assertEquals(1, starts.size, "reconnecting is not a new game starting")
+
+        collectors.forEach { it.cancel() }
+        startJob.cancel()
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `a stream is not reopened once the game is over`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+        api.eventStreamChannel.send(gameStartEvent())
+        advanceUntilIdle()
+        api.gameStreamChannel.send(gameFull())
+        advanceUntilIdle()
+
+        api.gameStreamChannel.send(gameState(moves = "e2e4", status = "resign", winner = "black"))
+        advanceUntilIdle()
+        api.gameStreamChannel.close()
+        advanceUntilIdle()
+
+        assertEquals(1, api.gameStreamOpens, "a finished game has nothing left to reconnect to")
+
+        adapter.disconnect()
+    }
+
+    @Test
+    fun `retry backs off and then levels out`() {
+        assertEquals(1_000, retryDelayMs(1))
+        assertEquals(2_000, retryDelayMs(2))
+        assertEquals(4_000, retryDelayMs(3))
+        assertEquals(30_000, retryDelayMs(20), "capped, so a connection coming back is picked up")
     }
 
     // -- Event flows do not replay --

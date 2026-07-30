@@ -23,7 +23,18 @@ class FakeLichessApi : LichessApi {
     var lastAiChallengeParams: AiChallengeParams? = null
 
     val eventStreamChannel = Channel<String>(Channel.UNLIMITED)
-    val gameStreamChannel = Channel<String>(Channel.UNLIMITED)
+
+    /**
+     * The channel the next [streamGame] call will read from.
+     *
+     * Reassignable so a test can drop a stream and hand the reconnect a fresh one, the way a real
+     * reconnection gets a new HTTP response rather than the one that just failed.
+     */
+    var gameStreamChannel = Channel<String>(Channel.UNLIMITED)
+
+    /** How many times a game stream has been opened, so a test can see a reconnect happen. */
+    var gameStreamOpens = 0
+        private set
     val seekChannel = Channel<String>(Channel.UNLIMITED)
     val challengeChannel = Channel<String>(Channel.UNLIMITED)
 
@@ -39,8 +50,10 @@ class FakeLichessApi : LichessApi {
     override fun streamEvents(token: String): Flow<String> =
         eventStreamChannel.consumeAsFlow()
 
-    override fun streamGame(token: String, gameId: String): Flow<String> =
-        gameStreamChannel.consumeAsFlow()
+    override fun streamGame(token: String, gameId: String): Flow<String> {
+        gameStreamOpens++
+        return gameStreamChannel.consumeAsFlow()
+    }
 
     override suspend fun createSeek(
         token: String,
