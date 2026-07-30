@@ -33,7 +33,10 @@ private fun debugLog(msg: String) = scp.protocol.debugLog("[carballo] $msg")
  */
 class CarballoAdapter : EngineAdapterModule {
 
-    private val _errors = MutableSharedFlow<EngineErrorEvent>()
+    // Buffered so that announcing a failure never parks the search path waiting for a collector.
+    // Emission uses emit rather than tryEmit: tryEmit cannot suspend, so on an unbuffered flow it
+    // drops the value and reports it in a return nobody was checking - engine.error never arrived.
+    private val _errors = MutableSharedFlow<EngineErrorEvent>(extraBufferCapacity = ERROR_BUFFER)
     override val errors: SharedFlow<EngineErrorEvent> = _errors
 
     private var engine: SearchEngine? = null
@@ -185,7 +188,7 @@ class CarballoAdapter : EngineAdapterModule {
             }
         } catch (e: Exception) {
             val message = "Engine error: ${e.message}"
-            _errors.tryEmit(EngineErrorEvent("ENGINE_CRASHED", message))
+            _errors.emit(EngineErrorEvent("ENGINE_CRASHED", message))
             Result.Failure(EngineError.EngineCrashed(diagnostic = message))
         }
     }
@@ -242,5 +245,7 @@ class CarballoAdapter : EngineAdapterModule {
         const val MAX_ELO = 2100
         const val DEFAULT_HASH = 64
         const val DEFAULT_SEARCH_DEPTH = 10
+
+        private const val ERROR_BUFFER = 8
     }
 }

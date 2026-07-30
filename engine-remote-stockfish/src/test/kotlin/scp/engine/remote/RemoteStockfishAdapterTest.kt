@@ -1,7 +1,9 @@
 package scp.engine.remote
 
 import com.sun.net.httpserver.HttpServer
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import scp.protocol.*
 import java.net.InetSocketAddress
 import kotlin.test.*
@@ -323,5 +325,30 @@ class RemoteStockfishAdapterTest {
             val result = adapter.newGame()
             assertIs<Result.Success<Unit>>(result)
         }
+    }
+
+    // --- error events ---
+
+    @Test
+    fun `a failed request reaches a subscribed collector`() = runTest {
+        // The flow used to be a rendezvous one emitted into with tryEmit, which reports failure
+        // rather than suspending - so the event was dropped unless the collector happened to be
+        // parked in collect at that instant, and engine.error never arrived at all.
+        val unreachable = RemoteStockfishAdapter(apiUrl = "http://127.0.0.1:1/v1")
+        val seen = mutableListOf<EngineErrorEvent>()
+        val collector = launch { unreachable.errors.collect { seen += it } }
+        yield()
+
+        unreachable.configure(emptyMap())
+        assertIs<Result.Failure<EngineError>>(unreachable.getBestMove(GetBestMoveParams(fen = START_FEN)))
+        yield()
+
+        assertEquals(1, seen.size, "the failure should have been announced on engine.error")
+        assertEquals("ENGINE_CRASHED", seen.single().code)
+        collector.cancel()
+    }
+
+    private companion object {
+        const val START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
     }
 }

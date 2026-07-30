@@ -19,7 +19,10 @@ class RemoteStockfishAdapter(
     private val apiUrl: String = "https://chess-api.com/v1",
 ) : EngineAdapterModule {
 
-    private val _errors = MutableSharedFlow<EngineErrorEvent>()
+    // Buffered so that announcing a failure never parks the request path waiting for a collector.
+    // Emission uses emit rather than tryEmit: tryEmit cannot suspend, so on an unbuffered flow it
+    // drops the value and reports it in a return nobody was checking - engine.error never arrived.
+    private val _errors = MutableSharedFlow<EngineErrorEvent>(extraBufferCapacity = ERROR_BUFFER)
     override val errors: SharedFlow<EngineErrorEvent> = _errors
 
     // OkHttp instead of the JDK HttpClient so this module runs on Android as well as the JVM.
@@ -134,7 +137,7 @@ class RemoteStockfishAdapter(
             )
         } catch (e: Exception) {
             val message = "API request failed: ${e.message}"
-            _errors.tryEmit(EngineErrorEvent("ENGINE_CRASHED", message))
+            _errors.emit(EngineErrorEvent("ENGINE_CRASHED", message))
             Result.Failure(EngineError.EngineCrashed(diagnostic = message))
         }
     }
@@ -206,5 +209,7 @@ class RemoteStockfishAdapter(
         const val PARAM_THINKING_TIME = "MaxThinkingTime"
         private const val DEFAULT_DEPTH = 12
         private const val DEFAULT_THINKING_TIME_MS = 50
+
+        private const val ERROR_BUFFER = 8
     }
 }
