@@ -16,11 +16,28 @@ sealed class InferenceOutcome {
     data class SingleMove(val uci: String) : InferenceOutcome()
     data class NeedsPromotion(val fromTo: String) : InferenceOutcome()
     data class Ambiguous(val moves: List<String>) : InferenceOutcome()
+
+    /**
+     * The board still shows the position that was already on it.
+     *
+     * Kept apart from [NoMatch] because it has an ordinary cause - the player signalled before
+     * actually moving a piece - and telling them that is far more useful than reporting the board
+     * as being in a state no legal move explains.
+     */
+    data object Unchanged : InferenceOutcome()
+
     data object NoMatch : InferenceOutcome()
 }
 
 fun inferMove(fen: String, boardState: BoardState, boardLevel: BoardCapabilityLevel): InferenceOutcome {
     val game = Game.fromFen(fen).getOrNull() ?: return InferenceOutcome.NoMatch
+
+    // Tested before the candidate moves rather than after they all fail: every legal move vacates
+    // the square it came from, so a board still matching the current position cannot also match the
+    // result of a move, and the two cases can never compete.
+    if (boardMatches(game.currentPosition.board, boardState, boardLevel)) {
+        return InferenceOutcome.Unchanged
+    }
 
     val matching = mutableListOf<Move>()
     for (move in game.availableMoves) {

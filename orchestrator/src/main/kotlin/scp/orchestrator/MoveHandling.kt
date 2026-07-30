@@ -25,6 +25,13 @@ internal suspend fun Orchestrator.handleMoveReady() {
             val chosen = ui.promptMoveDisambiguation(outcome.moves, gameState.turn).getOrNull() ?: return
             chosen
         }
+        // Not a desync: the position is exactly the one expected, so there is nothing to reconcile
+        // and no need for the heavier out-of-sync dialog.
+        is InferenceOutcome.Unchanged -> {
+            ui.displayError("The board has not changed. Move a piece, then tap again.")
+            return
+        }
+
         is InferenceOutcome.NoMatch -> {
             ui.boardDesync(gameState.fen, "Board does not match any legal move")
             return

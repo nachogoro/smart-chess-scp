@@ -150,28 +150,44 @@ class MoveInferenceTest {
     }
 
     // -----------------------------------------------------------------------
+    // Board still showing the current position (Unchanged)
+    // -----------------------------------------------------------------------
+
+    // A board identical to the position being played means the player signalled before moving,
+    // which is reported as Unchanged rather than as an unexplainable board.
+
+    @Test
+    fun `board still at the current position at FULL level returns Unchanged`() {
+        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
+        val result = inferMove(startFen, boardState, BoardCapabilityLevel.FULL)
+        assertIs<InferenceOutcome.Unchanged>(result)
+    }
+
+    @Test
+    fun `board still at the current position at COLOR level returns Unchanged`() {
+        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.COLOR)
+        val result = inferMove(startFen, boardState, BoardCapabilityLevel.COLOR)
+        assertIs<InferenceOutcome.Unchanged>(result)
+    }
+
+    @Test
+    fun `board still at the current position at OCCUPANCY level returns Unchanged`() {
+        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.OCCUPANCY)
+        val result = inferMove(startFen, boardState, BoardCapabilityLevel.OCCUPANCY)
+        assertIs<InferenceOutcome.Unchanged>(result)
+    }
+
+    // -----------------------------------------------------------------------
     // Invalid move (NoMatch)
     // -----------------------------------------------------------------------
 
     @Test
-    fun `no matching move at FULL level returns NoMatch`() {
-        // Board unchanged from start — no legal move produces the starting position
-        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.FULL)
-        assertIs<InferenceOutcome.NoMatch>(result)
-    }
-
-    @Test
-    fun `no matching move at COLOR level returns NoMatch`() {
-        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.COLOR)
+    fun `board two moves ahead returns NoMatch`() {
+        // Two plies on from the position being played, so it is neither unchanged nor reachable by
+        // any single legal move - the case that genuinely means the board and the game disagree.
+        val twoMovesOn = fenAfterMove(fenAfterMove(startFen, "e2e4"), "e7e5")
+        val boardState = boardStateFromFen(twoMovesOn, BoardCapabilityLevel.COLOR)
         val result = inferMove(startFen, boardState, BoardCapabilityLevel.COLOR)
-        assertIs<InferenceOutcome.NoMatch>(result)
-    }
-
-    @Test
-    fun `no matching move at OCCUPANCY level returns NoMatch`() {
-        val boardState = boardStateFromFen(startFen, BoardCapabilityLevel.OCCUPANCY)
-        val result = inferMove(startFen, boardState, BoardCapabilityLevel.OCCUPANCY)
         assertIs<InferenceOutcome.NoMatch>(result)
     }
 

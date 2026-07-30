@@ -108,14 +108,35 @@ class MoveHandlingTest {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        // Board unchanged = no legal move matches = desync
-        board.boardState = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
+        // Two plies ahead of the game: no single legal move explains it, so the board and the game
+        // genuinely disagree.
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2",
+            BoardCapabilityLevel.FULL,
+        )
         ui.emitMoveReady(gameId)
 
         assertNotNull(ui.lastDesync)
 
         orchestrator.stop()
     }
+
+    @Test
+    fun `board still at the current position reports an error rather than a desync`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val orchestrator = startLocalGame()
+            val gameId = orchestrator.session!!.gameId
+
+            // Signalling before touching a piece is an ordinary slip, so it must not be dressed up
+            // as the board having drifted out of sync.
+            board.boardState = boardStateFromFen(startFen, BoardCapabilityLevel.FULL)
+            ui.emitMoveReady(gameId)
+
+            assertNull(ui.lastDesync)
+            assertEquals("The board has not changed. Move a piece, then tap again.", ui.lastError)
+
+            orchestrator.stop()
+        }
 
     @Test
     fun `move rejected by game controller shows error and stays in state`() = runTest(UnconfinedTestDispatcher()) {
