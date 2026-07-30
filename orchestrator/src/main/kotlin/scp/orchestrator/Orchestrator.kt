@@ -260,11 +260,7 @@ class Orchestrator(
         // before it returns. Ending the game here as well meant racing it and winning, so the
         // real termination was dropped along with the event and every checkmate reached the UI
         // as OTHER. Returning leaves the ending to the one party that knows what it was.
-        if (gameState.status != GameStatus.NOT_STARTED
-                && gameState.status != GameStatus.IN_PROGRESS
-                && gameState.status != GameStatus.DRAW_OFFERED) {
-            return
-        }
+        if (gameState.status.isFinished) return
 
         when (s.mode) {
             GameMode.LOCAL -> {

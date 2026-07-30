@@ -103,7 +103,7 @@ class GameLifecycleTest {
             val base = super.getState(gameId)
             if (base is Result.Success && ended) {
                 return Result.Success(
-                    base.value.copy(status = GameStatus.CHECKMATE, result = GameResult.WHITE_WINS)
+                    base.value.copy(status = GameStatus.FINISHED, result = GameResult.WHITE_WINS)
                 )
             }
             return base
@@ -215,7 +215,7 @@ class GameLifecycleTest {
             val endedItself = object : FakeGameControllerModule() {
                 override suspend fun getState(gameId: String): Result<GameError, GameState> =
                     when (val state = super.getState(gameId)) {
-                        is Result.Success -> Result.Success(state.value.copy(status = GameStatus.TIMEOUT))
+                        is Result.Success -> Result.Success(state.value.copy(status = GameStatus.FINISHED))
                         is Result.Failure -> state
                     }
             }

@@ -23,7 +23,7 @@ class InternalGame(
     var timerJob: Job? = null
 
     val isOver: Boolean
-        get() = status in TERMINAL_STATUSES
+        get() = status.isFinished
 
     val turn: Color
         get() = chessColorToScp(chessGame.activeColor)
@@ -33,15 +33,4 @@ class InternalGame(
 
     val uciMoves: List<String>
         get() = moveHistory.map { it.move }
-
-    companion object {
-        private val TERMINAL_STATUSES = setOf(
-            GameStatus.CHECKMATE,
-            GameStatus.STALEMATE,
-            GameStatus.DRAW,
-            GameStatus.RESIGNED,
-            GameStatus.TIMEOUT,
-            GameStatus.ABORTED,
-        )
-    }
 }

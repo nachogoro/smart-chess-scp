@@ -23,9 +23,28 @@ data class TimeControl(
 
 enum class TimeControlType { FISCHER, BRONSTEIN, SIMPLE, NONE }
 
+/**
+ * Where a game is in its life, and nothing else.
+ *
+ * It used to carry a terminal value per ending - checkmate, resigned, timeout and the rest - which
+ * was a second, lossier copy of [Termination] that no consumer ever read: every use of it asked
+ * only whether the game was still going. Worse, the two could disagree, because a status could
+ * name an outcome ([Termination] said drawn, the status said timeout) while [Termination] named a
+ * cause.
+ *
+ * Why a finished game finished is [Termination]'s, and who won is [GameResult]'s.
+ */
 enum class GameStatus {
-    NOT_STARTED, IN_PROGRESS, DRAW_OFFERED,
-    CHECKMATE, STALEMATE, DRAW, RESIGNED, TIMEOUT, ABORTED,
+    NOT_STARTED,
+    IN_PROGRESS,
+
+    /** A draw has been offered and is waiting for an answer. */
+    DRAW_OFFERED,
+
+    FINISHED;
+
+    /** Whether the game is over. */
+    val isFinished: Boolean get() = this == FINISHED
 }
 
 enum class GameResult(val protocolString: String) {

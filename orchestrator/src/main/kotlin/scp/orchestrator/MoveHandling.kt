@@ -225,12 +225,7 @@ internal suspend fun Orchestrator.handleFlagFell(event: FlagFallEvent) {
     // Under external authority the server is the timekeeper and decides timeouts itself (§4.2).
     if (s.mode == GameMode.REMOTE) return
 
-    val status = gameController.getState(s.gameId).getOrNull()?.status
-    val stillRunning = status == null ||
-        status == GameStatus.NOT_STARTED ||
-        status == GameStatus.IN_PROGRESS ||
-        status == GameStatus.DRAW_OFFERED
-    if (!stillRunning) return
+    if (gameController.getState(s.gameId).getOrNull()?.status?.isFinished == true) return
 
     // A controller that only reports the flag leaves the decision here, and whose clock ran out
     // is enough to settle it.

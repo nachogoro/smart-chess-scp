@@ -152,7 +152,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.CHECKMATE, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.WHITE_WINS, state.value.result)
     }
 
@@ -178,7 +178,7 @@ class GameControllerTest {
 
         val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "b6c7"))
         assertIs<Result.Success<SubmitMoveResult>>(result)
-        assertEquals(GameStatus.STALEMATE, result.value.status)
+        assertEquals(GameStatus.FINISHED, result.value.status)
     }
 
     @Test
@@ -218,7 +218,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.RESIGNED, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.BLACK_WINS, state.value.result)
     }
 
@@ -249,7 +249,7 @@ class GameControllerTest {
         gc.respondDraw(gameId, Color.BLACK, accept = true)
         val finalState = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(finalState)
-        assertEquals(GameStatus.DRAW, finalState.value.status)
+        assertEquals(GameStatus.FINISHED, finalState.value.status)
         assertEquals(GameResult.DRAW, finalState.value.result)
     }
 
@@ -341,7 +341,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.ABORTED, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.IN_PROGRESS, state.value.result)
     }
 
@@ -378,51 +378,39 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.RESIGNED, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.BLACK_WINS, state.value.result)
     }
 
     @Test
-    fun `setResult takes the status from the termination`() = runTest {
-        // Previously inferred by substring-matching the reason, which got checkmate wrong: no
-        // branch matched "checkmate", so a 1-0 result fell through to RESIGNED.
+    fun `setResult relays the authority's termination untouched`() = runTest {
+        // There is no longer a status to derive from it. The status says the game is over, the
+        // result says how it turned out, and the termination says why - each once.
         val cases = listOf(
-            Termination.Checkmate to GameStatus.CHECKMATE,
-            Termination.Stalemate to GameStatus.STALEMATE,
-            Termination.Resignation to GameStatus.RESIGNED,
-            Termination.Timeout to GameStatus.TIMEOUT,
-            Termination.Aborted to GameStatus.ABORTED,
-            Termination.Agreement to GameStatus.DRAW,
+            Termination.Checkmate,
+            Termination.Resignation,
+            Termination.Timeout,
+            Termination.Aborted,
+            Termination.Agreement,
+            Termination.ThreefoldRepetition,
+            Termination.Other(authorityCode = "variantEnd"),
         )
 
-        for ((termination, expected) in cases) {
+        for (termination in cases) {
             val gc = GameController(backgroundScope)
+            val endings = mutableListOf<GameEndedEvent>()
+            val collector = launch { gc.gameEnded.collect { endings.add(it) } }
             val gameId = createGame(gc, authority = Authority.EXTERNAL)
+
             gc.setResult(SetResultParams(gameId, GameResult.WHITE_WINS, termination))
+            advanceUntilIdle()
 
-            val state = gc.getState(gameId)
-            assertIs<Result.Success<GameState>>(state)
-            assertEquals(expected, state.value.status, "for $termination")
+            val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+            assertEquals(GameStatus.FINISHED, state.status, "for $termination")
+            assertEquals(GameResult.WHITE_WINS, state.result, "for $termination")
+            assertEquals(termination, endings.single().termination, "for $termination")
+            collector.cancel()
         }
-    }
-
-    @Test
-    fun `setResult falls back to the result for an unnamed termination`() = runTest {
-        // A server ending a game for a reason this protocol does not name: the result is all
-        // there is to go on, and the game must still reach a terminal status.
-        val gc = GameController(backgroundScope)
-        val gameId = createGame(gc, authority = Authority.EXTERNAL)
-
-        gc.setResult(SetResultParams(
-            gameId,
-            GameResult.WHITE_WINS,
-            Termination.Other(authorityCode = "variantEnd", text = "variant end"),
-        ))
-
-        val state = gc.getState(gameId)
-        assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.RESIGNED, state.value.status)
-        assertEquals(GameResult.WHITE_WINS, state.value.result)
     }
 
     @Test
@@ -504,7 +492,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.CHECKMATE, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.WHITE_WINS, state.value.result)
     }
 
@@ -516,7 +504,7 @@ class GameControllerTest {
 
         val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "b6c7"))
         assertIs<Result.Success<SubmitMoveResult>>(result)
-        assertEquals(GameStatus.STALEMATE, result.value.status)
+        assertEquals(GameStatus.FINISHED, result.value.status)
     }
 
     // -- Retention and concurrency --
@@ -564,7 +552,7 @@ class GameControllerTest {
 
             // Whichever won, the game ended exactly once and agrees with itself.
             val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
-            assertEquals(GameStatus.TIMEOUT, state.status)
+            assertEquals(GameStatus.FINISHED, state.status)
             assertEquals(1, endings.count { it.gameId == gameId }, "ended more than once")
             assertEquals(GameResult.BLACK_WINS, state.result)
             collector.cancel()
@@ -667,7 +655,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.TIMEOUT, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
         assertEquals(GameResult.BLACK_WINS, state.value.result)
         // The increment used to be added to the overrun, leaving white better off than they
         // started: 1000 - 3000 + 5000 = 3000.
@@ -779,7 +767,7 @@ class GameControllerTest {
 
         val state = gc.getState(gameId)
         assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.TIMEOUT, state.value.status)
+        assertEquals(GameStatus.FINISHED, state.value.status)
 
         // With replay=1, the last emitted event is available
         val events = mutableListOf<FlagFallEvent>()
@@ -791,22 +779,54 @@ class GameControllerTest {
     }
 
     @Test
-    fun `flag fall with insufficient material results in draw`() = runTest {
+    fun `a flag fall under FIDE 6 9 is both a timeout and a draw`() = runTest {
+        // The ending that the old vocabulary could not express. It had to be reported either as a
+        // timeout, losing that nobody won, or as DRAWN, losing that a clock is what stopped it -
+        // and the code did both at once, saying `timeout` in the status and `drawn` in the
+        // termination. With the cause and the outcome in separate fields, both are simply true.
         val timeSource = FakeTimeSource(0L)
         val gc = GameController(this, timeSource)
+        val endings = mutableListOf<GameEndedEvent>()
+        val collector = launch { gc.gameEnded.collect { endings.add(it) } }
+
         val tc = TimeControl(TimeControlType.SIMPLE, initialMs = 5000)
-        // White has K+Q, Black has bare K. White to move.
-        // If White flags, Black can't checkmate with bare K → draw.
+        // White has K+Q and is to move; Black has a bare king. If White flags, Black cannot
+        // checkmate with what is left, so the game is drawn rather than lost.
         val fen = "3k4/8/8/8/8/8/3K4/3Q4 w - - 0 1"
         val gameId = createGame(gc, fen = fen, timeControl = tc)
 
         testScheduler.advanceTimeBy(6000)
         testScheduler.runCurrent()
+        advanceUntilIdle()
 
-        val state = gc.getState(gameId)
-        assertIs<Result.Success<GameState>>(state)
-        assertEquals(GameStatus.TIMEOUT, state.value.status)
-        assertEquals(GameResult.DRAW, state.value.result)
+        val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+        assertEquals(GameStatus.FINISHED, state.status, "where the game is")
+        assertEquals(GameResult.DRAW, state.result, "how it turned out - nobody won")
+        assertEquals(Termination.Timeout, endings.single().termination, "why it stopped - the clock")
+
+        collector.cancel()
+    }
+
+    @Test
+    fun `a flag fall the opponent could have mated from is a loss`() = runTest {
+        // Same cause, different outcome. Only the result tells them apart.
+        val timeSource = FakeTimeSource(0L)
+        val gc = GameController(this, timeSource)
+        val endings = mutableListOf<GameEndedEvent>()
+        val collector = launch { gc.gameEnded.collect { endings.add(it) } }
+
+        val tc = TimeControl(TimeControlType.SIMPLE, initialMs = 5000)
+        val gameId = createGame(gc, timeControl = tc)
+
+        testScheduler.advanceTimeBy(6000)
+        testScheduler.runCurrent()
+        advanceUntilIdle()
+
+        val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+        assertEquals(GameResult.BLACK_WINS, state.result)
+        assertEquals(Termination.Timeout, endings.single().termination)
+
+        collector.cancel()
     }
 
     // -- Game ended events --

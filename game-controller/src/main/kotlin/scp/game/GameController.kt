@@ -173,8 +173,8 @@ class GameController(
         // Handle terminal status
         if (game.isOver) {
             game.timerJob?.cancel()
-            game.result = determineResult(newStatus, gameAfterMove)
-            pending += endedEvent(game, terminationFor(newStatus, gameAfterMove))
+            game.result = determineResult(gameAfterMove)
+            pending += endedEvent(game, terminationFor(gameAfterMove))
         } else if (game.authority == Authority.LOCAL && game.timeControl != null) {
             // Restart timer for next player
             game.turnStartedAt = timeSource.currentTimeMs()
@@ -210,7 +210,7 @@ class GameController(
         if (game.isOver) return Result.Failure(GameError.GameOver())
 
         game.timerJob?.cancel()
-        game.status = GameStatus.RESIGNED
+        game.status = GameStatus.FINISHED
         game.result = when (color) {
             Color.WHITE -> GameResult.BLACK_WINS
             Color.BLACK -> GameResult.WHITE_WINS
@@ -265,7 +265,7 @@ class GameController(
 
         if (accept) {
             game.timerJob?.cancel()
-            game.status = GameStatus.DRAW
+            game.status = GameStatus.FINISHED
             game.result = GameResult.DRAW
             game.drawOffer = null
             pending += endedEvent(game, Termination.Agreement)
@@ -306,7 +306,7 @@ class GameController(
 
         game.timerJob?.cancel()
         game.chessGame = newChessGame
-        game.status = GameStatus.DRAW
+        game.status = GameStatus.FINISHED
         game.result = GameResult.DRAW
 
         pending += endedEvent(game, terminationForDraw(claimReason))
@@ -328,7 +328,7 @@ class GameController(
         if (game.isOver) return Result.Failure(GameError.GameOver())
 
         game.timerJob?.cancel()
-        game.status = GameStatus.ABORTED
+        game.status = GameStatus.FINISHED
         game.result = GameResult.IN_PROGRESS
 
         pending += endedEvent(game, Termination.Aborted)
@@ -362,7 +362,7 @@ class GameController(
 
         game.timerJob?.cancel()
         game.result = params.result
-        game.status = statusFrom(params.termination, params.result)
+        game.status = GameStatus.FINISHED
 
         pending += endedEvent(game, params.termination)
 
@@ -399,47 +399,28 @@ class GameController(
         authority: Authority,
     ): GameStatus {
         return when (chessGame.gameState) {
-            ChessGameState.WHITE_WON, ChessGameState.BLACK_WON -> GameStatus.CHECKMATE
-            ChessGameState.DRAWN -> {
-                val drawReason = chessGame.drawReason
-                when {
-                    drawReason == DrawReason.STALEMATE -> GameStatus.STALEMATE
-                    // In external mode, only checkmate/stalemate are terminal from submitMove
-                    authority == Authority.EXTERNAL -> GameStatus.IN_PROGRESS
-                    else -> GameStatus.DRAW
-                }
+            ChessGameState.WHITE_WON, ChessGameState.BLACK_WON -> GameStatus.FINISHED
+            ChessGameState.DRAWN -> when {
+                chessGame.drawReason == DrawReason.STALEMATE -> GameStatus.FINISHED
+                // In external mode, only checkmate and stalemate are terminal from submitMove
+                authority == Authority.EXTERNAL -> GameStatus.IN_PROGRESS
+                else -> GameStatus.FINISHED
             }
-            ChessGameState.PLAYING -> {
-                if (chessGame.history.isEmpty()) GameStatus.NOT_STARTED
-                else GameStatus.IN_PROGRESS
-            }
+            ChessGameState.PLAYING -> GameStatus.IN_PROGRESS
         }
     }
 
-    private fun determineResult(
-        status: GameStatus,
-        chessGame: ChessGame,
-    ): GameResult {
-        return when (status) {
-            GameStatus.CHECKMATE -> when (chessGame.gameState) {
-                ChessGameState.WHITE_WON -> GameResult.WHITE_WINS
-                ChessGameState.BLACK_WON -> GameResult.BLACK_WINS
-                else -> GameResult.IN_PROGRESS
-            }
-            GameStatus.STALEMATE, GameStatus.DRAW -> GameResult.DRAW
-            else -> GameResult.IN_PROGRESS
-        }
+    private fun determineResult(chessGame: ChessGame): GameResult = when (chessGame.gameState) {
+        ChessGameState.WHITE_WON -> GameResult.WHITE_WINS
+        ChessGameState.BLACK_WON -> GameResult.BLACK_WINS
+        ChessGameState.DRAWN -> GameResult.DRAW
+        ChessGameState.PLAYING -> GameResult.IN_PROGRESS
     }
 
-    private fun terminationFor(
-        status: GameStatus,
-        chessGame: ChessGame,
-    ): Termination = when (status) {
-        GameStatus.CHECKMATE -> Termination.Checkmate
-        GameStatus.STALEMATE -> Termination.Stalemate
-        // The status says the game was drawn; only the rules engine knows under which rule.
-        GameStatus.DRAW -> terminationForDraw(chessGame.drawReason)
-        else -> Termination.Other()
+    private fun terminationFor(chessGame: ChessGame): Termination = when (chessGame.gameState) {
+        ChessGameState.WHITE_WON, ChessGameState.BLACK_WON -> Termination.Checkmate
+        ChessGameState.DRAWN -> terminationForDraw(chessGame.drawReason)
+        ChessGameState.PLAYING -> Termination.Other()
     }
 
     /**
@@ -461,32 +442,6 @@ class GameController(
         // drawn, so only the reason is lost.
         else -> Termination.Other()
     }
-
-    /**
-     * The status an external authority's ending puts the game into.
-     *
-     * Total, and decided by the termination rather than by the wording of it. The exception is
-     * [Termination.Other], where the authority reported an ending this protocol does not name and
-     * the result is genuinely all there is to go on.
-     */
-    private fun statusFrom(termination: Termination, result: GameResult): GameStatus =
-        when (termination) {
-            Termination.Checkmate -> GameStatus.CHECKMATE
-            Termination.Stalemate -> GameStatus.STALEMATE
-            Termination.Resignation -> GameStatus.RESIGNED
-            Termination.Timeout -> GameStatus.TIMEOUT
-            Termination.Aborted -> GameStatus.ABORTED
-            Termination.Agreement,
-            Termination.InsufficientMaterial,
-            Termination.FiftyMoveRule,
-            Termination.SeventyFiveMoveRule,
-            Termination.ThreefoldRepetition,
-            Termination.FivefoldRepetition -> GameStatus.DRAW
-            is Termination.Other -> when (result) {
-                GameResult.WHITE_WINS, GameResult.BLACK_WINS -> GameStatus.RESIGNED
-                GameResult.DRAW, GameResult.IN_PROGRESS -> GameStatus.DRAW
-            }
-        }
 
     /**
      * The colour whose clock has already run out, if the side to move has no time left.
@@ -528,7 +483,7 @@ class GameController(
         val opponentCannotMate = claimReason == DrawReason.INSUFFICIENT_MATERIAL
             || claimReason == DrawReason.OPPONENT_INSUFFICIENT_MATERIAL
 
-        game.status = GameStatus.TIMEOUT
+        game.status = GameStatus.FINISHED
         // The cause is the clock either way. Whether that cost the player the game or only drew
         // it is the result's to say, which is why nothing here has to choose between the two.
         game.result = if (opponentCannotMate) {
