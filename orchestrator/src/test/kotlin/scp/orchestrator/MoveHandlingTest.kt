@@ -52,12 +52,13 @@ class MoveHandlingTest {
     /** Start an engine game and return the orchestrator. */
     private suspend fun CoroutineScope.startEngineGame(
         playerColor: Color = Color.WHITE,
+        timeControl: TimeControl? = null,
     ): Orchestrator {
         val orchestrator = createOrchestrator(withEngine = true)
         launchOrchestrator(orchestrator)
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
         ui.configureEngineGameResponse = Result.Success(
-            EngineGameConfig(playerColor = playerColor, engineSettings = emptyMap(), timeControl = null)
+            EngineGameConfig(playerColor = playerColor, engineSettings = emptyMap(), timeControl = timeControl)
         )
         ui.emitNewGameRequested()
         return orchestrator
@@ -235,6 +236,61 @@ class MoveHandlingTest {
         assertEquals(Color.WHITE, (orchestrator.state as OrchestratorState.AwaitingPlayerMove).color)
 
         orchestrator.stop()
+    }
+
+    @Test
+    fun `engine is given the game history and a time budget`() = runTest(UnconfinedTestDispatcher()) {
+        // Sending only the current position left the engine unable to see repetitions, and
+        // sending no budget left it searching to whatever fixed depth its adapter defaults to -
+        // which bears no relation to the clock, and is how the engine flags its opponent.
+        val tc = TimeControl(TimeControlType.FISCHER, initialMs = 300_000, incrementMs = 2_000)
+        val orchestrator = startEngineGame(playerColor = Color.WHITE, timeControl = tc)
+        val gameId = orchestrator.session!!.gameId
+
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            BoardCapabilityLevel.FULL,
+        )
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e7e5"))
+        ui.emitMoveReady(gameId)
+
+        val asked = assertNotNull(engine.lastBestMoveParams)
+        assertEquals(startFen, asked.fen, "the engine searches from the starting position")
+        assertEquals(listOf("e2e4"), asked.moves, "...with the moves played from it")
+        // 300000 / 30 + 2000 * 3/4 = 11500, held down to the 10s ceiling.
+        assertEquals(10_000, asked.timeMs)
+        assertNull(asked.maxDepth, "a clock decides the search, not a depth")
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `an untimed engine game still bounds the search`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startEngineGame(playerColor = Color.WHITE, timeControl = null)
+        val gameId = orchestrator.session!!.gameId
+
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            BoardCapabilityLevel.FULL,
+        )
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e7e5"))
+        ui.emitMoveReady(gameId)
+
+        val asked = assertNotNull(engine.lastBestMoveParams)
+        assertNotNull(asked.maxDepth, "with no clock to divide up, a depth bounds the search")
+        assertNotNull(asked.timeMs, "and a ceiling stops it hanging the game")
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `think time is a share of the clock, and never more than it holds`() {
+        // A comfortable clock: a thirtieth of it, plus most of the increment.
+        assertEquals(120_000 / 30 + 1_500, engineThinkTimeMs(120_000, 2_000))
+        // A short one is bounded by what is actually left, less the margin to send the move.
+        assertTrue(engineThinkTimeMs(1_000, 2_000) <= 800)
+        // Never longer than the ceiling, however much time there is.
+        assertEquals(10_000, engineThinkTimeMs(60_000_000, 60_000))
     }
 
     @Test

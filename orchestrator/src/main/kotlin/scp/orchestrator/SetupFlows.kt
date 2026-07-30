@@ -2,6 +2,18 @@ package scp.orchestrator
 
 import scp.protocol.*
 
+/**
+ * Only a fallback, for a controller that created a game it will not then describe.
+ *
+ * The starting position is read back from the game controller rather than assumed: it is the
+ * party that decided it, and `game.create` takes a FEN.
+ */
+private const val STANDARD_START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+/** The position [gameId] starts from, as the game controller reports it. */
+private suspend fun Orchestrator.initialFenOf(gameId: String): String =
+    gameController.getState(gameId).getOrNull()?.fen ?: STANDARD_START_FEN
+
 internal suspend fun Orchestrator.runSetup() {
     val availableModes = buildList {
         add(GameMode.LOCAL)
@@ -46,6 +58,7 @@ internal suspend fun Orchestrator.setupLocal() {
             continue
         }
         val gameId = (createResult as Result.Success).value.gameId
+        val initialFen = initialFenOf(gameId)
 
         session = GameSession(
             gameId = gameId,
@@ -54,6 +67,7 @@ internal suspend fun Orchestrator.setupLocal() {
             timeControl = config.timeControl,
             whiteName = config.whiteName,
             blackName = config.blackName,
+            initialFen = initialFen,
         )
         notifyGameStarted(GameStartedInfo(
             gameId = gameId,
@@ -62,7 +76,7 @@ internal suspend fun Orchestrator.setupLocal() {
             timeControl = config.timeControl,
             whiteName = config.whiteName,
             blackName = config.blackName,
-            initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            initialFen = initialFen,
         ))
         transitionToAwaitingMove()
         return
@@ -110,6 +124,7 @@ internal suspend fun Orchestrator.setupEngine() {
             continue
         }
         val gameId = (createResult as Result.Success).value.gameId
+        val initialFen = initialFenOf(gameId)
 
         eng.newGame()
 
@@ -120,6 +135,7 @@ internal suspend fun Orchestrator.setupEngine() {
             playerColor = config.playerColor,
             timeControl = config.timeControl,
             engine = eng,
+            initialFen = initialFen,
         )
         notifyGameStarted(GameStartedInfo(
             gameId = gameId,
@@ -128,7 +144,7 @@ internal suspend fun Orchestrator.setupEngine() {
             timeControl = config.timeControl,
             whiteName = null,
             blackName = null,
-            initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            initialFen = initialFen,
         ))
         startModuleCollectors(session!!)
         transitionToAwaitingMove()

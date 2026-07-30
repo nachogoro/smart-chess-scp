@@ -67,15 +67,62 @@ internal suspend fun Orchestrator.handleMoveReady() {
     }
 }
 
+/** Moves the engine is assumed to still have to play, for dividing up what is left on its clock. */
+private const val ASSUMED_MOVES_REMAINING = 30
+
+private const val MIN_THINK_MS = 50L
+private const val MAX_THINK_MS = 10_000L
+
+/** Left on the clock for the move itself to be submitted after the search stops. */
+private const val CLOCK_SAFETY_MARGIN_MS = 200L
+
+/** Depth to search to when there is no clock to divide up. */
+private const val UNTIMED_SEARCH_DEPTH = 12
+
+/**
+ * How long the engine may think, given what is left on its clock.
+ *
+ * A share of the remaining time plus most of the increment the move will earn back, held below
+ * what the clock can actually afford. An engine given no budget at all searches to whatever fixed
+ * depth its adapter defaults to, which bears no relation to the time control and is how a player
+ * ends up watching their opponent flag them.
+ */
+internal fun engineThinkTimeMs(remainingMs: Long, incrementMs: Long): Long {
+    val share = remainingMs / ASSUMED_MOVES_REMAINING + (incrementMs * 3) / 4
+    val affordable = (remainingMs - CLOCK_SAFETY_MARGIN_MS).coerceAtLeast(MIN_THINK_MS)
+    return share.coerceIn(MIN_THINK_MS, MAX_THINK_MS).coerceAtMost(affordable)
+}
+
 internal suspend fun Orchestrator.handleEngineMove() {
     val s = session ?: return
     val eng = s.engine ?: return
     val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
-    debugLog("[orchestrator] Requesting engine move: fen=${gameState.fen}")
+    // The engine is handed the game, not just a position: a starting FEN plus the moves played
+    // from it (PROTOCOL.md §4.3). Sending only the current position leaves it unable to see a
+    // repetition it is walking into, or one it could claim.
+    val startingFen = s.initialFen
+    val searchFen = startingFen ?: gameState.fen
+    val history = if (startingFen != null) gameState.moves else null
+
+    // It is the engine's turn, so the side to move is the engine.
+    val remainingMs = gameState.clocks?.let {
+        when (gameState.turn) {
+            Color.WHITE -> it.whiteMs
+            Color.BLACK -> it.blackMs
+        }
+    }
+    val thinkMs = remainingMs?.let { engineThinkTimeMs(it, s.timeControl?.incrementMs ?: 0) }
+
+    debugLog("[orchestrator] Requesting engine move: fen=${gameState.fen} moves=${history?.size ?: 0} thinkMs=$thinkMs")
 
     val bestMove = eng.getBestMove(GetBestMoveParams(
-        fen = gameState.fen,
+        fen = searchFen,
+        moves = history,
+        // Untimed games still get a ceiling, so an adapter that would otherwise think until it is
+        // stopped - which nothing here ever does - cannot hang the game.
+        timeMs = thinkMs ?: MAX_THINK_MS,
+        maxDepth = if (thinkMs == null) UNTIMED_SEARCH_DEPTH else null,
     ))
 
     when (bestMove) {

@@ -17,6 +17,15 @@ data class GameSession(
      * only party that hears about every move, so anywhere else would miss some of them.
      */
     val fen: String? = null,
+    /**
+     * The position the game began from.
+     *
+     * Kept alongside the current one because an engine is given the game rather than a position:
+     * `engine.getBestMove` takes a starting FEN and the moves played from it, which is what lets
+     * it see repetitions (PROTOCOL.md §4.3). Null only while a remote game is still being sought,
+     * before there is a game to have started anywhere.
+     */
+    val initialFen: String? = null,
     val whiteName: String? = null,
     val blackName: String? = null,
     val engine: EngineAdapterModule? = null,

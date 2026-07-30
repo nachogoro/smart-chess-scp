@@ -189,6 +189,7 @@ class Orchestrator(
                             gameId = gameId,
                             playerColor = e.color,
                             timeControl = e.timeControl,
+                            initialFen = e.fen,
                         )
                         notifyGameStarted(GameStartedInfo(
                             gameId = gameId,

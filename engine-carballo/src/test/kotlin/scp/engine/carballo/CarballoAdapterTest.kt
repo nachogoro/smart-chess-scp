@@ -156,6 +156,26 @@ class CarballoAdapterTest {
     }
 
     @Test
+    fun `depth and time bound the search together`() = runTest(timeout = 30.seconds) {
+        // They are independent ceilings, and the search stops at whichever it reaches first.
+        // Treating them as alternatives, and preferring depth, meant that a caller naming both -
+        // which is what a clock-derived budget with a depth cap looks like - had its time budget
+        // quietly dropped and could think for as long as the depth took.
+        val adapter = configuredAdapter()
+        val started = System.nanoTime()
+        val result = adapter.getBestMove(GetBestMoveParams(
+            fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            maxDepth = 30,
+            timeMs = 300,
+        ))
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000
+
+        assertIs<Result.Success<BestMoveResult>>(result)
+        assertTrue(result.value.depth!! < 30, "the time bound should have stopped it short of depth 30")
+        assertTrue(elapsedMs < 10_000, "the time bound should have been honoured, took ${elapsedMs}ms")
+    }
+
+    @Test
     fun `getBestMove finds mate in one`() = runTest(timeout = 30.seconds) {
         // White to move, Qh7# is mate in 1
         val adapter = configuredAdapter()

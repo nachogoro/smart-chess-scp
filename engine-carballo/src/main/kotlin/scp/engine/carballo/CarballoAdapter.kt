@@ -8,6 +8,9 @@ import com.alonsoruibal.chess.search.SearchObserver
 import com.alonsoruibal.chess.search.SearchParameters
 import com.alonsoruibal.chess.search.SearchStatusInfo
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.withContext
@@ -147,19 +150,39 @@ class CarballoAdapter : EngineAdapterModule {
                     debugLog("getBestMove: position after moves: ${eng.board.fen}")
                 }
 
-                // Configure search parameters.
+                // Both bounds are maximums and the search must stop at whichever comes first, but
+                // Carballo cannot be told that: SearchParameters.calculateMoveTime abandons the
+                // deadline entirely the moment a depth is set, so handing it both silently drops
+                // the time budget and lets the search run as long as the depth takes. The depth
+                // goes to the engine and the time is held over it from outside instead.
                 val searchParams = SearchParameters()
-                val maxDepth = params.maxDepth
+                val depth = params.maxDepth
                 val timeMs = params.timeMs
                 when {
-                    maxDepth != null -> searchParams.depth = maxDepth
-                    timeMs != null -> searchParams.moveTime = timeMs.toInt()
+                    depth != null -> searchParams.depth = depth
+                    timeMs != null -> searchParams.moveTime = timeMs.coerceIn(1, MAX_MOVE_TIME_MS).toInt()
                     else -> searchParams.depth = DEFAULT_SEARCH_DEPTH
                 }
 
-                // Run search (blocks this thread until complete)
                 lastSearchInfo = null
-                eng.go(searchParams)
+
+                // Run search (blocks this thread until complete)
+                if (depth != null && timeMs != null) {
+                    coroutineScope {
+                        val deadline = launch(Dispatchers.IO) {
+                            delay(timeMs)
+                            debugLog("getBestMove: time budget spent, stopping the search")
+                            eng.stop()
+                        }
+                        try {
+                            eng.go(searchParams)
+                        } finally {
+                            deadline.cancel()
+                        }
+                    }
+                } else {
+                    eng.go(searchParams)
+                }
 
                 val bestMove = eng.bestMove
                 if (bestMove == 0) {
@@ -247,5 +270,8 @@ class CarballoAdapter : EngineAdapterModule {
         const val DEFAULT_SEARCH_DEPTH = 10
 
         private const val ERROR_BUFFER = 8
+
+        /** Carballo's moveTime is an int of milliseconds. */
+        private const val MAX_MOVE_TIME_MS = Int.MAX_VALUE.toLong()
     }
 }
