@@ -163,6 +163,56 @@ class GameLifecycleTest {
     }
 
     @Test
+    fun `a flag fall says who won on time`() = runTest(UnconfinedTestDispatcher()) {
+        // The result used to be left at its default of "*", so a UI could say the game ended on
+        // time and never who by. Whose clock ran out settles it.
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        gc.emitFlagFall(FlagFallEvent(gameId = gameId, color = Color.WHITE))
+
+        val summary = assertNotNull(ui.lastGameSummary)
+        assertEquals(Termination.Timeout, summary.termination)
+        assertEquals(GameResult.BLACK_WINS, summary.result)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a controller that ends the game itself is left to report it`() =
+        runTest(UnconfinedTestDispatcher()) {
+            // PROTOCOL.md 6.3 allows either. Where the controller ends the game, game.ended is
+            // already on its way with the result and the termination, and ending it here as well
+            // would win that race and report whatever this end of it happened to assume.
+            val endedItself = object : FakeGameControllerModule() {
+                override suspend fun getState(gameId: String): Result<GameError, GameState> =
+                    when (val state = super.getState(gameId)) {
+                        is Result.Success -> Result.Success(state.value.copy(status = GameStatus.TIMEOUT))
+                        is Result.Failure -> state
+                    }
+            }
+            gc = endedItself
+            val orchestrator = startLocalGame()
+            val gameId = orchestrator.session!!.gameId
+
+            gc.emitFlagFall(FlagFallEvent(gameId = gameId, color = Color.WHITE))
+
+            assertNull(ui.lastGameSummary, "the controller's game.ended reports this one")
+            assertNotNull(orchestrator.session)
+
+            // ...and when it arrives, it is what the UI is told.
+            gc.emitGameEnded(
+                GameEndedEvent(gameId, GameResult.DRAW, Termination.Drawn(DrawKind.InsufficientMaterial), "")
+            )
+            assertEquals(
+                Termination.Drawn(DrawKind.InsufficientMaterial),
+                ui.lastGameSummary?.termination,
+            )
+
+            orchestrator.stop()
+        }
+
+    @Test
     fun `flag fall in engine game ends game`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startEngineGame(playerColor = Color.WHITE)
         val gameId = orchestrator.session!!.gameId

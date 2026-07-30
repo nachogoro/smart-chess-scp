@@ -209,6 +209,39 @@ internal suspend fun Orchestrator.handleResign() {
 }
 
 /**
+ * A player's clock has run out.
+ *
+ * §6.3 lets a game controller either end the game itself or leave the decision here, so this has
+ * to work for both. Where it ended the game, `game.ended` is already on its way carrying the
+ * result, and ending it here as well would win that race and report a timeout with no winner in
+ * it - which is what used to happen, so a player was never told who won on time.
+ */
+internal suspend fun Orchestrator.handleFlagFell(event: FlagFallEvent) {
+    val s = session ?: return
+    if (event.gameId != s.gameId) return
+
+    // Under external authority the server is the timekeeper and decides timeouts itself (§4.2).
+    if (s.mode == GameMode.REMOTE) return
+
+    val status = gameController.getState(s.gameId).getOrNull()?.status
+    val stillRunning = status == null ||
+        status == GameStatus.NOT_STARTED ||
+        status == GameStatus.IN_PROGRESS ||
+        status == GameStatus.DRAW_OFFERED
+    if (!stillRunning) return
+
+    // A controller that only reports the flag leaves the decision here, and whose clock ran out
+    // is enough to settle it.
+    endGame(
+        result = when (event.color) {
+            Color.WHITE -> GameResult.BLACK_WINS
+            Color.BLACK -> GameResult.WHITE_WINS
+        },
+        termination = Termination.Timeout,
+    )
+}
+
+/**
  * Aborts the game, by whichever route this mode's authority requires.
  *
  * The local game controller announces the ending itself on game.ended, so nothing here ends the

@@ -211,8 +211,12 @@ class FakeUIModule : UIModule {
 
     var lastDrawResponsePrompt: Pair<String, DrawOffer>? = null
 
+    /** Runs while the prompt is up, so a test can observe state that only exists then. */
+    var onPromptDrawResponse: (suspend () -> Unit)? = null
+
     override suspend fun promptDrawResponse(gameId: String, from: DrawOffer): Result<UIError, Boolean> {
         lastDrawResponsePrompt = gameId to from
+        onPromptDrawResponse?.invoke()
         return promptDrawResponseResult
     }
 

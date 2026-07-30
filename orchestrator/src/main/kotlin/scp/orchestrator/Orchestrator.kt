@@ -104,9 +104,7 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.FlagFell -> {
-                    if (event.event.gameId == session?.gameId && session?.mode != GameMode.REMOTE) {
-                        endGame(termination = Termination.Timeout)
-                    }
+                    handleFlagFell(event.event)
                     return
                 }
                 is OrchestratorEvent.RemoteGameEnded -> {
