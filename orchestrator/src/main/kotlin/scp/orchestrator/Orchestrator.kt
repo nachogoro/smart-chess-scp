@@ -239,11 +239,15 @@ class Orchestrator(
             clocks = gameState.clocks ?: s.clocks,
         )
 
-        // Check if game already ended
+        // A game that has already ended is not one to await a move in. Ending it is not this
+        // method's to do, though: the game controller announces every ending on game.ended,
+        // carrying the termination, and that event is already on its way - submitMove emits it
+        // before it returns. Ending the game here as well meant racing it and winning, so the
+        // real termination was dropped along with the event and every checkmate reached the UI
+        // as OTHER. Returning leaves the ending to the one party that knows what it was.
         if (gameState.status != GameStatus.NOT_STARTED
                 && gameState.status != GameStatus.IN_PROGRESS
                 && gameState.status != GameStatus.DRAW_OFFERED) {
-            endGame(result = gameState.result, termination = Termination.Other())
             return
         }
 

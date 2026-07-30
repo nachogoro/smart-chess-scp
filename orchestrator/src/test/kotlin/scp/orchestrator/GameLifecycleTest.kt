@@ -92,6 +92,63 @@ class GameLifecycleTest {
         orchestrator.stop()
     }
 
+    /**
+     * A controller that ends a game the way the real one does: `submitMove` records a terminal
+     * status *and* announces the ending on `game.ended`, both before it returns to the caller.
+     */
+    private class MatingGameController : FakeGameControllerModule() {
+        private var ended = false
+
+        override suspend fun getState(gameId: String): Result<GameError, GameState> {
+            val base = super.getState(gameId)
+            if (base is Result.Success && ended) {
+                return Result.Success(
+                    base.value.copy(status = GameStatus.CHECKMATE, result = GameResult.WHITE_WINS)
+                )
+            }
+            return base
+        }
+
+        override suspend fun submitMove(params: SubmitMoveParams): Result<GameError, SubmitMoveResult> {
+            val result = super.submitMove(params)
+            ended = true
+            emitGameEnded(
+                GameEndedEvent(params.gameId, GameResult.WHITE_WINS, Termination.Checkmate, "final-fen")
+            )
+            return result
+        }
+    }
+
+    @Test
+    fun `a mating move is reported to the UI as checkmate`() = runTest(UnconfinedTestDispatcher()) {
+        // The controller's game.ended is queued while the orchestrator is still handling the move
+        // that caused it. Ending the game from transitionToAwaitingMove as well used to win that
+        // race and report Termination.Other, losing how every local game finished.
+        gc = MatingGameController()
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+
+        val mateInOne = "rnbqkbnr/pppp1ppp/8/4p3/6P1/5P2/PPPPP2P/RNBQKBNR b KQkq - 0 2"
+        gc.setGameState(
+            GameState(gameId, mateInOne, emptyList(), GameStatus.IN_PROGRESS, Color.BLACK, null, GameResult.IN_PROGRESS)
+        )
+        board.boardState = boardStateFromFen(fenAfter(mateInOne, "d8h4"), BoardCapabilityLevel.FULL)
+
+        ui.emitMoveReady(gameId)
+
+        assertEquals(Termination.Checkmate, ui.lastGameSummary?.termination)
+        assertEquals(GameResult.WHITE_WINS, ui.lastGameSummary?.result)
+        assertIs<OrchestratorState.Idle>(orchestrator.state)
+
+        orchestrator.stop()
+    }
+
+    private fun fenAfter(fen: String, uci: String): String {
+        val game = com.nachogoro.simplechess.Game.fromFen(fen).getOrThrow()
+        return game.makeMove(game.availableMoves.first { moveToUci(it) == uci }).getOrThrow()
+            .currentPosition.fen
+    }
+
     @Test
     fun `flag fall in local game ends game`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startLocalGame()
