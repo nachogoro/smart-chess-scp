@@ -47,8 +47,8 @@ class FakeBoard(
     private val filePath: Path,
 ) : BoardModule {
 
-    private val _errors = MutableSharedFlow<BoardErrorEvent>()
-    override val errors: SharedFlow<BoardErrorEvent> = _errors
+    private val _errors = MutableSharedFlow<BoardError>()
+    override val errors: SharedFlow<BoardError> = _errors
 
     /**
      * Returns the board's capability level, read from the first line of the file.

@@ -131,15 +131,15 @@ class Orchestrator(
                     return
                 }
                 is OrchestratorEvent.BoardError -> {
-                    ui.displayError(UIMessage.BoardFailed(event.event))
+                    ui.displayError(UIMessage.BoardFailed(event.error))
                     return
                 }
                 is OrchestratorEvent.EngineError -> {
-                    ui.displayError(UIMessage.EngineFailed(event.event))
+                    ui.displayError(UIMessage.EngineFailed(event.error))
                     return
                 }
                 is OrchestratorEvent.RemoteError -> {
-                    ui.displayError(UIMessage.RemoteFailed(event.event))
+                    ui.displayError(UIMessage.RemoteFailed(event.error))
                     return
                 }
                 else -> {} // Fall through to state-specific handling

@@ -9,7 +9,8 @@ interface EngineAdapterModule {
     suspend fun stop(): Result<EngineError, Unit>
     suspend fun newGame(): Result<EngineError, Unit>
 
-    val errors: SharedFlow<EngineErrorEvent>
+    /** Failures the engine reports of its own accord. Carries the error itself; see [EngineError]. */
+    val errors: SharedFlow<EngineError>
 }
 
 data class EngineCapabilities(
@@ -50,7 +51,3 @@ sealed class EngineError(
     class InvalidParams(val parameter: String? = null) : EngineError("INVALID_PARAMS")
 }
 
-data class EngineErrorEvent(
-    override val code: String,
-    override val diagnostic: String? = null,
-) : ModuleError

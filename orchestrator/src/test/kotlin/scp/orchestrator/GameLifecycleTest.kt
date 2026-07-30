@@ -257,19 +257,42 @@ class GameLifecycleTest {
 
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
-        board.emitError(BoardErrorEvent(code = "SENSOR_FAILURE", diagnostic = "sensor malfunction"))
+        board.emitError(BoardError.SensorFailure(unreadableSquares = listOf("e4", "d5")))
 
-        assertEquals("SENSOR_FAILURE", assertIs<UIMessage.BoardFailed>(ui.lastError).error.code)
+        val failed = assertIs<UIMessage.BoardFailed>(ui.lastError)
+        assertEquals("SENSOR_FAILURE", failed.error.code)
+        // The squares survive the trip to the UI. Flattened to a code and a diagnostic - which
+        // 2.6 forbids displaying - the only honest thing a UI could say was that something went
+        // wrong, when it could have said which pieces to re-seat.
+        assertEquals(
+            listOf("e4", "d5"),
+            assertIs<BoardError.SensorFailure>(failed.error).unreadableSquares,
+        )
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
     }
 
     @Test
+    fun `a platform failure keeps its status code and the platform's own words`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val orchestrator = startRemoteGame(Color.WHITE)
+
+            remote.emitError(RemoteError.PlatformError(statusCode = 429, serverText = "Too many requests"))
+
+            val failed = assertIs<UIMessage.RemoteFailed>(ui.lastError)
+            val error = assertIs<RemoteError.PlatformError>(failed.error)
+            assertEquals(429, error.statusCode)
+            assertEquals("Too many requests", error.serverText)
+
+            orchestrator.stop()
+        }
+
+    @Test
     fun `engine error during game shows error and stays in state`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startEngineGame(playerColor = Color.WHITE)
 
-        engine.emitError(EngineErrorEvent(code = "ENGINE_CRASHED", diagnostic = "engine process died"))
+        engine.emitError(EngineError.EngineCrashed(diagnostic = "engine process died"))
 
         assertEquals("ENGINE_CRASHED", assertIs<UIMessage.EngineFailed>(ui.lastError).error.code)
 
@@ -282,7 +305,7 @@ class GameLifecycleTest {
 
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
-        remote.emitError(RemoteErrorEvent(code = "CONNECTION_LOST", diagnostic = "connection lost"))
+        remote.emitError(RemoteError.ConnectionLost(diagnostic = "connection lost"))
 
         assertEquals("CONNECTION_LOST", assertIs<UIMessage.RemoteFailed>(ui.lastError).error.code)
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)

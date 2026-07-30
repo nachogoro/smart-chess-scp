@@ -21,7 +21,7 @@ sealed class OrchestratorEvent {
     data object RemoteDrawOffered : OrchestratorEvent()
 
     // Error events
-    data class BoardError(val event: BoardErrorEvent) : OrchestratorEvent()
-    data class EngineError(val event: EngineErrorEvent) : OrchestratorEvent()
-    data class RemoteError(val event: RemoteErrorEvent) : OrchestratorEvent()
+    data class BoardError(val error: scp.protocol.BoardError) : OrchestratorEvent()
+    data class EngineError(val error: scp.protocol.EngineError) : OrchestratorEvent()
+    data class RemoteError(val error: scp.protocol.RemoteError) : OrchestratorEvent()
 }

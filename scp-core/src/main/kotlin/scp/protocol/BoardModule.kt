@@ -6,7 +6,14 @@ interface BoardModule {
     suspend fun getCapabilities(): Result<BoardError, BoardCapabilities>
     suspend fun getState(): Result<BoardError, BoardState>
 
-    val errors: SharedFlow<BoardErrorEvent>
+    /**
+     * Hardware problems the board reports of its own accord.
+     *
+     * Carries the error itself, so an asynchronous failure says as much as a refused call does:
+     * a sensor failure names the squares it could not trust, and a UI can tell the player which
+     * pieces to re-seat rather than only that something went wrong (PROTOCOL.md §4.1).
+     */
+    val errors: SharedFlow<BoardError>
 }
 
 data class BoardCapabilities(val level: BoardCapabilityLevel)
@@ -33,7 +40,3 @@ sealed class BoardError(
     class NotReady(diagnostic: String? = null) : BoardError("NOT_READY", diagnostic)
 }
 
-data class BoardErrorEvent(
-    override val code: String,
-    override val diagnostic: String? = null,
-) : ModuleError

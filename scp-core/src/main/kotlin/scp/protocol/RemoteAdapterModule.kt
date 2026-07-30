@@ -26,7 +26,15 @@ interface RemoteAdapterModule {
     val opponentMove: SharedFlow<OpponentMoveEvent>
     val gameEnded: SharedFlow<RemoteGameEndedEvent>
     val drawOffered: SharedFlow<Unit>
-    val errors: SharedFlow<RemoteErrorEvent>
+    /**
+     * Failures the platform or the connection to it reports of its own accord.
+     *
+     * Carries the error itself: a PLATFORM_ERROR keeps the status code and the platform's own
+     * words, which is the one text §2.6 lets a UI show as it stands, and INVALID_PARAMS keeps the
+     * field it was about. Flattened to a code and a diagnostic, none of that survived, and the
+     * diagnostic is the one thing a UI must not display.
+     */
+    val errors: SharedFlow<RemoteError>
 }
 
 data class RemoteCapabilities(
@@ -98,9 +106,13 @@ sealed class RemoteError(
      * something is not a network that is down.
      */
     class Unreachable(diagnostic: String? = null) : RemoteError("UNREACHABLE", diagnostic)
+
+    /**
+     * The connection carrying the game was lost.
+     *
+     * Its own code because the game is still live on the platform and may be resumable, which is
+     * not true of the others (PROTOCOL.md §7.5).
+     */
+    class ConnectionLost(diagnostic: String? = null) : RemoteError("CONNECTION_LOST", diagnostic)
 }
 
-data class RemoteErrorEvent(
-    override val code: String,
-    override val diagnostic: String? = null,
-) : ModuleError

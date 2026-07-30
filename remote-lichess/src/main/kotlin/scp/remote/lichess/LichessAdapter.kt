@@ -103,8 +103,8 @@ class LichessAdapter(
     private val _drawOffered = MutableSharedFlow<Unit>(extraBufferCapacity = EVENT_BUFFER)
     override val drawOffered: SharedFlow<Unit> = _drawOffered
 
-    private val _errors = MutableSharedFlow<RemoteErrorEvent>(extraBufferCapacity = EVENT_BUFFER)
-    override val errors: SharedFlow<RemoteErrorEvent> = _errors
+    private val _errors = MutableSharedFlow<RemoteError>(extraBufferCapacity = EVENT_BUFFER)
+    override val errors: SharedFlow<RemoteError> = _errors
 
     /**
      * Returns the adapter's capabilities, including connection parameters
@@ -264,7 +264,7 @@ class LichessAdapter(
                             "Friend" -> {
                                 val opponent = settings[PARAM_OPPONENT_NAME] as? String
                                     ?: return@launch _errors.emit(
-                                        RemoteErrorEvent("INVALID_PARAMS", diagnostic = "opponent_name is required for friend challenges")
+                                        RemoteError.InvalidParams(PARAM_OPPONENT_NAME)
                                     )
                                 api.createChallenge(t, opponent, time, increment, rated, color)
                             }
@@ -276,8 +276,7 @@ class LichessAdapter(
                         // game start notifications arrive via the event stream, not this stream.
                         stream.collect {}
                     } catch (e: Exception) {
-                        val action = if (opponentType == "Friend") "Challenge" else "Seek"
-                        _errors.emit(RemoteErrorEvent("PLATFORM_ERROR", diagnostic = "$action failed: ${e.message}"))
+                        _errors.emit(e.toRemoteError())
                     }
                 }
             }
@@ -403,7 +402,7 @@ class LichessAdapter(
                 debugLog("Event stream ended normally")
             } catch (e: Exception) {
                 debugLog("Event stream error: ${e::class.simpleName}: ${e.message}")
-                _errors.emit(RemoteErrorEvent("CONNECTION_LOST", "Event stream lost: ${e.message}"))
+                _errors.emit(RemoteError.ConnectionLost("event stream lost: ${e.message}"))
             }
         }
     }
@@ -473,7 +472,7 @@ class LichessAdapter(
                 debugLog("Game stream ended normally for $gameId")
             } catch (e: Exception) {
                 debugLog("Game stream error for $gameId: ${e::class.simpleName}: ${e.message}")
-                _errors.emit(RemoteErrorEvent("CONNECTION_LOST", "Game stream lost: ${e.message}"))
+                _errors.emit(RemoteError.ConnectionLost("game stream lost: ${e.message}"))
             }
         }
     }

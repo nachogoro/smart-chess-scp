@@ -11,8 +11,8 @@ import scp.protocol.*
 class FakeBoardModule(
     private val level: BoardCapabilityLevel = BoardCapabilityLevel.FULL,
 ) : BoardModule {
-    private val _errors = MutableSharedFlow<BoardErrorEvent>()
-    override val errors: SharedFlow<BoardErrorEvent> = _errors
+    private val _errors = MutableSharedFlow<BoardError>()
+    override val errors: SharedFlow<BoardError> = _errors
 
     var boardState: BoardState = BoardState(emptyMap())
     var failWith: BoardError? = null
@@ -27,7 +27,7 @@ class FakeBoardModule(
         return Result.Success(boardState)
     }
 
-    suspend fun emitError(event: BoardErrorEvent) = _errors.emit(event)
+    suspend fun emitError(error: BoardError) = _errors.emit(error)
 }
 
 // ---------------------------------------------------------------------------
@@ -258,8 +258,8 @@ class FakeUIModule : UIModule {
 // ---------------------------------------------------------------------------
 
 class FakeEngineModule : EngineAdapterModule {
-    private val _errors = MutableSharedFlow<EngineErrorEvent>()
-    override val errors: SharedFlow<EngineErrorEvent> = _errors
+    private val _errors = MutableSharedFlow<EngineError>()
+    override val errors: SharedFlow<EngineError> = _errors
 
     var capabilities = EngineCapabilities(name = "FakeEngine", author = "Test", parameters = emptyList())
     var capabilitiesFail: EngineError? = null
@@ -293,7 +293,7 @@ class FakeEngineModule : EngineAdapterModule {
         return Result.Success(Unit)
     }
 
-    suspend fun emitError(event: EngineErrorEvent) = _errors.emit(event)
+    suspend fun emitError(error: EngineError) = _errors.emit(error)
 }
 
 // ---------------------------------------------------------------------------
@@ -305,13 +305,13 @@ class FakeRemoteModule : RemoteAdapterModule {
     private val _opponentMove = MutableSharedFlow<OpponentMoveEvent>()
     private val _gameEnded = MutableSharedFlow<RemoteGameEndedEvent>()
     private val _drawOffered = MutableSharedFlow<Unit>()
-    private val _errors = MutableSharedFlow<RemoteErrorEvent>()
+    private val _errors = MutableSharedFlow<RemoteError>()
 
     override val gameStarted: SharedFlow<GameStartedEvent> = _gameStarted
     override val opponentMove: SharedFlow<OpponentMoveEvent> = _opponentMove
     override val gameEnded: SharedFlow<RemoteGameEndedEvent> = _gameEnded
     override val drawOffered: SharedFlow<Unit> = _drawOffered
-    override val errors: SharedFlow<RemoteErrorEvent> = _errors
+    override val errors: SharedFlow<RemoteError> = _errors
 
     var capabilities = RemoteCapabilities(
         platform = "FakePlatform", features = emptyList(),
@@ -383,5 +383,5 @@ class FakeRemoteModule : RemoteAdapterModule {
     suspend fun emitOpponentMove(event: OpponentMoveEvent) = _opponentMove.emit(event)
     suspend fun emitGameEnded(event: RemoteGameEndedEvent) = _gameEnded.emit(event)
     suspend fun emitDrawOffered() = _drawOffered.emit(Unit)
-    suspend fun emitError(event: RemoteErrorEvent) = _errors.emit(event)
+    suspend fun emitError(error: RemoteError) = _errors.emit(error)
 }

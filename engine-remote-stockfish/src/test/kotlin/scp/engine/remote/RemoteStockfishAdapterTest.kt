@@ -335,7 +335,7 @@ class RemoteStockfishAdapterTest {
         // rather than suspending - so the event was dropped unless the collector happened to be
         // parked in collect at that instant, and engine.error never arrived at all.
         val unreachable = RemoteStockfishAdapter(apiUrl = "http://127.0.0.1:1/v1")
-        val seen = mutableListOf<EngineErrorEvent>()
+        val seen = mutableListOf<EngineError>()
         val collector = launch { unreachable.errors.collect { seen += it } }
         yield()
 
