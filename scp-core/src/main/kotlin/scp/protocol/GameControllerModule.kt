@@ -77,7 +77,7 @@ data class GameHistoryMove(
     val timestamp: String,
 )
 
-sealed class GameError(val code: String, val message: String) {
+sealed class GameError(override val code: String, override val message: String) : ModuleError {
     class IllegalMove(message: String = "Illegal move") : GameError("ILLEGAL_MOVE", message)
     class GameNotFound(message: String = "Game not found") : GameError("GAME_NOT_FOUND", message)
     class GameOver(message: String = "Game is over") : GameError("GAME_OVER", message)

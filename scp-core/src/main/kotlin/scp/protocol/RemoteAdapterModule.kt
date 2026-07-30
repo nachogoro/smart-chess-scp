@@ -56,11 +56,11 @@ data class RemoteGameEndedEvent(
     val termination: Termination,
 )
 
-sealed class RemoteError(val code: String, val message: String) {
+sealed class RemoteError(override val code: String, override val message: String) : ModuleError {
     class AuthFailed(message: String = "Authentication failed") : RemoteError("AUTH_FAILED", message)
     class InvalidParams(message: String = "Invalid parameters") : RemoteError("INVALID_PARAMS", message)
     class NotConnected(message: String = "Not connected") : RemoteError("NOT_CONNECTED", message)
     class PlatformError(message: String = "Platform error") : RemoteError("PLATFORM_ERROR", message)
 }
 
-data class RemoteErrorEvent(val code: String, val message: String)
+data class RemoteErrorEvent(override val code: String, override val message: String) : ModuleError

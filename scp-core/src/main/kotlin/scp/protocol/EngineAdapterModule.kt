@@ -32,11 +32,11 @@ data class BestMoveResult(
     val pv: List<String>? = null,
 )
 
-sealed class EngineError(val code: String, val message: String) {
+sealed class EngineError(override val code: String, override val message: String) : ModuleError {
     class EngineCrashed(message: String = "Engine crashed") : EngineError("ENGINE_CRASHED", message)
     class InvalidPosition(message: String = "Invalid position") : EngineError("INVALID_POSITION", message)
     class NotConfigured(message: String = "Engine not configured") : EngineError("NOT_CONFIGURED", message)
     class InvalidParams(message: String = "Invalid parameters") : EngineError("INVALID_PARAMS", message)
 }
 
-data class EngineErrorEvent(val code: String, val message: String)
+data class EngineErrorEvent(override val code: String, override val message: String) : ModuleError

@@ -75,7 +75,7 @@ data class ShowOpponentMoveParams(
     val isEnPassant: Boolean = false,
 )
 
-sealed class UIError(val code: String, val message: String) {
+sealed class UIError(override val code: String, override val message: String) : ModuleError {
     class Cancelled(message: String = "User cancelled") : UIError("CANCELLED", message)
     class Timeout(message: String = "UI timeout") : UIError("TIMEOUT", message)
 }
