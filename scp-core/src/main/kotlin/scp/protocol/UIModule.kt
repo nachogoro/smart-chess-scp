@@ -95,8 +95,8 @@ data class GameSummary(
     val blackName: String?,
     val playerColor: Color?,
     val timeControl: TimeControl?,
-    val result: String,
-    val reason: String,
+    val result: GameResult,
+    val termination: Termination,
     val finalFen: String,
     val moves: List<GameHistoryMove>,
 )

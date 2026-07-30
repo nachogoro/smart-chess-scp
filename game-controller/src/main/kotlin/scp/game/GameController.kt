@@ -125,7 +125,7 @@ class GameController(
         if (game.isOver) {
             game.timerJob?.cancel()
             game.result = determineResult(newStatus, gameAfterMove)
-            emitGameEnded(game, reasonFromStatus(newStatus, gameAfterMove))
+            emitGameEnded(game, terminationFor(newStatus, gameAfterMove))
         } else if (game.authority == Authority.LOCAL && game.timeControl != null) {
             // Restart timer for next player
             game.turnStartedAt = timeSource.currentTimeMs()
@@ -156,7 +156,7 @@ class GameController(
             Color.BLACK -> GameResult.WHITE_WINS
         }
 
-        emitGameEnded(game, "resignation")
+        emitGameEnded(game, Termination.Resignation)
 
         return Result.Success(Unit)
     }
@@ -188,7 +188,7 @@ class GameController(
             game.status = GameStatus.DRAW
             game.result = GameResult.DRAW
             game.drawOffer = null
-            emitGameEnded(game, "draw by agreement")
+            emitGameEnded(game, Termination.Drawn(DrawKind.Agreement))
         } else {
             game.drawOffer = null
             game.status = GameStatus.IN_PROGRESS
@@ -222,14 +222,7 @@ class GameController(
         game.status = GameStatus.DRAW
         game.result = GameResult.DRAW
 
-        val reasonStr = when (claimReason) {
-            DrawReason.THREE_FOLD_REPETITION -> "threefold repetition"
-            DrawReason.FIFTY_MOVE_RULE -> "fifty-move rule"
-            DrawReason.INSUFFICIENT_MATERIAL -> "insufficient material"
-            DrawReason.OPPONENT_INSUFFICIENT_MATERIAL -> "insufficient material"
-            else -> "draw"
-        }
-        emitGameEnded(game, reasonStr)
+        emitGameEnded(game, Termination.Drawn(drawKindOf(claimReason)))
 
         return Result.Success(Unit)
     }
@@ -244,7 +237,7 @@ class GameController(
         game.status = GameStatus.ABORTED
         game.result = GameResult.IN_PROGRESS
 
-        emitGameEnded(game, "aborted")
+        emitGameEnded(game, Termination.Aborted)
 
         return Result.Success(Unit)
     }
@@ -270,7 +263,9 @@ class GameController(
         game.result = GameResult.fromProtocolString(params.result)
         game.status = statusFromExternalResult(params.result, params.reason)
 
-        emitGameEnded(game, params.reason)
+        // An external authority still reports its reason as prose, so it can only be passed on as
+        // an unclassified ending. Classifying it at the adapter is the next step.
+        emitGameEnded(game, Termination.Other(text = params.reason))
 
         return Result.Success(Unit)
     }
@@ -337,26 +332,27 @@ class GameController(
         }
     }
 
-    private fun reasonFromStatus(
+    private fun terminationFor(
         status: GameStatus,
         chessGame: ChessGame,
-    ): String {
-        return when (status) {
-            GameStatus.CHECKMATE -> "checkmate"
-            GameStatus.STALEMATE -> "stalemate"
-            GameStatus.DRAW -> {
-                when (chessGame.drawReason) {
-                    DrawReason.INSUFFICIENT_MATERIAL -> "insufficient material"
-                    DrawReason.SEVENTY_FIVE_MOVE_RULE -> "75-move rule"
-                    DrawReason.FIVE_FOLD_REPETITION -> "fivefold repetition"
-                    DrawReason.FIFTY_MOVE_RULE -> "fifty-move rule"
-                    DrawReason.THREE_FOLD_REPETITION -> "threefold repetition"
-                    DrawReason.OFFERED_AND_ACCEPTED -> "draw by agreement"
-                    else -> "draw"
-                }
-            }
-            else -> "unknown"
-        }
+    ): Termination = when (status) {
+        GameStatus.CHECKMATE -> Termination.Checkmate
+        GameStatus.STALEMATE -> Termination.Stalemate
+        // The status says the game was drawn; only the rules engine knows under which rule.
+        GameStatus.DRAW -> Termination.Drawn(drawKindOf(chessGame.drawReason))
+        else -> Termination.Other()
+    }
+
+    private fun drawKindOf(reason: DrawReason?): DrawKind = when (reason) {
+        DrawReason.OFFERED_AND_ACCEPTED -> DrawKind.Agreement
+        DrawReason.INSUFFICIENT_MATERIAL,
+        DrawReason.OPPONENT_INSUFFICIENT_MATERIAL -> DrawKind.InsufficientMaterial
+        DrawReason.FIFTY_MOVE_RULE -> DrawKind.FiftyMoveRule
+        DrawReason.SEVENTY_FIVE_MOVE_RULE -> DrawKind.SeventyFiveMoveRule
+        DrawReason.THREE_FOLD_REPETITION -> DrawKind.ThreefoldRepetition
+        DrawReason.FIVE_FOLD_REPETITION -> DrawKind.FivefoldRepetition
+        // A rule the library knows and this vocabulary does not: still a draw, kind unnamed.
+        else -> DrawKind.Other()
     }
 
     private fun statusFromExternalResult(result: String, reason: String): GameStatus {
@@ -410,24 +406,24 @@ class GameController(
             if (insufficientMaterial) {
                 currentGame.status = GameStatus.TIMEOUT
                 currentGame.result = GameResult.DRAW
-                emitGameEnded(currentGame, "timeout with insufficient material")
+                emitGameEnded(currentGame, Termination.Drawn(DrawKind.InsufficientMaterial))
             } else {
                 currentGame.status = GameStatus.TIMEOUT
                 currentGame.result = when (color) {
                     Color.WHITE -> GameResult.BLACK_WINS
                     Color.BLACK -> GameResult.WHITE_WINS
                 }
-                emitGameEnded(currentGame, "timeout")
+                emitGameEnded(currentGame, Termination.Timeout)
             }
         }
     }
 
-    private suspend fun emitGameEnded(game: InternalGame, reason: String) {
+    private suspend fun emitGameEnded(game: InternalGame, termination: Termination) {
         _gameEnded.emit(
             GameEndedEvent(
                 gameId = game.id,
-                result = game.result.protocolString,
-                reason = reason,
+                result = game.result,
+                termination = termination,
                 fen = game.fen,
             )
         )

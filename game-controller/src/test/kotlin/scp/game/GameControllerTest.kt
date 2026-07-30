@@ -604,7 +604,7 @@ class GameControllerTest {
         }
 
         advanceUntilIdle()
-        assertTrue(events.any { it.gameId == gameId && it.result == "1-0" && it.reason == "checkmate" })
+        assertTrue(events.any { it.gameId == gameId && it.result == GameResult.WHITE_WINS && it.termination == Termination.Checkmate })
 
         collectJob.cancel()
     }
@@ -620,7 +620,7 @@ class GameControllerTest {
         gc.resign(gameId, Color.BLACK)
 
         advanceUntilIdle()
-        assertTrue(events.any { it.gameId == gameId && it.result == "1-0" && it.reason == "resignation" })
+        assertTrue(events.any { it.gameId == gameId && it.result == GameResult.WHITE_WINS && it.termination == Termination.Resignation })
 
         collectJob.cancel()
     }

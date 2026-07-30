@@ -84,7 +84,7 @@ class GameLifecycleTest {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1-0", reason = "checkmate", fen = ""))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = GameResult.WHITE_WINS, termination = Termination.Checkmate, fen = ""))
 
         assertIs<OrchestratorState.Idle>(orchestrator.state)
         assertNull(orchestrator.session)
@@ -247,7 +247,7 @@ class GameLifecycleTest {
         ui.emitNewGameRequested()
         val gameId1 = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId1, result = "1/2-1/2", reason = "draw", fen = ""))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId1, result = GameResult.DRAW, termination = Termination.Drawn(DrawKind.Other()), fen = ""))
         assertIs<OrchestratorState.Idle>(orchestrator.state)
 
         // Second game
@@ -269,13 +269,13 @@ class GameLifecycleTest {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1-0", reason = "checkmate", fen = "final-fen"))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = GameResult.WHITE_WINS, termination = Termination.Checkmate, fen = "final-fen"))
 
         val summary = ui.lastGameSummary
         assertNotNull(summary)
         assertEquals(gameId, summary.gameId)
-        assertEquals("1-0", summary.result)
-        assertEquals("checkmate", summary.reason)
+        assertEquals(GameResult.WHITE_WINS, summary.result)
+        assertEquals(Termination.Checkmate, summary.termination)
         assertEquals(GameMode.LOCAL, summary.mode)
 
         orchestrator.stop()
@@ -289,7 +289,7 @@ class GameLifecycleTest {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "0-1", reason = "resignation", fen = ""))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = GameResult.BLACK_WINS, termination = Termination.Resignation, fen = ""))
 
         val summary = ui.lastGameSummary
         assertNotNull(summary)
@@ -320,7 +320,7 @@ class GameLifecycleTest {
         ui.emitNewGameRequested()
         val gameId = orchestrator.session!!.gameId
 
-        historyGc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1/2-1/2", reason = "stalemate", fen = ""))
+        historyGc.emitGameEnded(GameEndedEvent(gameId = gameId, result = GameResult.DRAW, termination = Termination.Stalemate, fen = ""))
 
         val summary = ui.lastGameSummary
         assertNotNull(summary)
@@ -341,8 +341,8 @@ class GameLifecycleTest {
         val summary = ui.lastGameSummary
         assertNotNull(summary)
         assertEquals(gameId, summary.gameId)
-        assertEquals("*", summary.result)
-        assertEquals("aborted", summary.reason)
+        assertEquals(GameResult.IN_PROGRESS, summary.result)
+        assertEquals(Termination.Aborted, summary.termination)
 
         orchestrator.stop()
     }
@@ -357,8 +357,8 @@ class GameLifecycleTest {
         val summary = ui.lastGameSummary
         assertNotNull(summary)
         assertEquals(gameId, summary.gameId)
-        assertEquals("0-1", summary.result)
-        assertEquals("resign", summary.reason)
+        assertEquals(GameResult.BLACK_WINS, summary.result)
+        assertEquals(Termination.Other(text = "resign"), summary.termination)
         assertEquals(GameMode.REMOTE, summary.mode)
         assertEquals(Color.WHITE, summary.playerColor)
 
@@ -370,7 +370,7 @@ class GameLifecycleTest {
         val orchestrator = startEngineGame(playerColor = Color.WHITE)
         val gameId = orchestrator.session!!.gameId
 
-        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = "1-0", reason = "checkmate", fen = ""))
+        gc.emitGameEnded(GameEndedEvent(gameId = gameId, result = GameResult.WHITE_WINS, termination = Termination.Checkmate, fen = ""))
 
         val summary = ui.lastGameSummary
         assertNotNull(summary)
@@ -390,7 +390,7 @@ class GameLifecycleTest {
         val summary = ui.lastGameSummary
         assertNotNull(summary)
         assertEquals(gameId, summary.gameId)
-        assertEquals("timeout", summary.reason)
+        assertEquals(Termination.Timeout, summary.termination)
 
         orchestrator.stop()
     }

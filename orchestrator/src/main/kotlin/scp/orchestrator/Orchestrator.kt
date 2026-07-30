@@ -99,13 +99,13 @@ class Orchestrator(
             when (event) {
                 is OrchestratorEvent.GameEnded -> {
                     if (event.event.gameId == session?.gameId) {
-                        endGame(result = event.event.result, reason = event.event.reason)
+                        endGame(result = event.event.result, termination = event.event.termination)
                     }
                     return
                 }
                 is OrchestratorEvent.FlagFell -> {
                     if (event.event.gameId == session?.gameId && session?.mode != GameMode.REMOTE) {
-                        endGame(reason = "timeout")
+                        endGame(termination = Termination.Timeout)
                     }
                     return
                 }
@@ -115,7 +115,12 @@ class Orchestrator(
                         result = event.event.result,
                         reason = event.event.reason,
                     ))
-                    endGame(result = event.event.result, reason = event.event.reason)
+                    // A remote still reports its ending as prose, so it can only be passed on
+                    // unclassified. Classifying it at the adapter is the next step.
+                    endGame(
+                        result = GameResult.fromProtocolString(event.event.result),
+                        termination = Termination.Other(text = event.event.reason),
+                    )
                     return
                 }
                 is OrchestratorEvent.ResignRequested -> {
@@ -125,7 +130,7 @@ class Orchestrator(
                 is OrchestratorEvent.AbortRequested -> {
                     gameController.abort(session!!.gameId)
                     if (session?.mode == GameMode.REMOTE) session?.remote?.disconnect()
-                    endGame(result = "*", reason = "aborted")
+                    endGame(result = GameResult.IN_PROGRESS, termination = Termination.Aborted)
                     return
                 }
                 is OrchestratorEvent.DrawRequested -> {
@@ -181,7 +186,7 @@ class Orchestrator(
                     is Result.Failure -> {
                         ui.displayError("Failed to create game: ${createResult.error.message}")
                         session?.remote?.disconnect()
-                        endGame(reason = "failed to create game")
+                        endGame(termination = Termination.Other())
                     }
                     is Result.Success -> {
                         val gameId = createResult.value.gameId
@@ -243,7 +248,7 @@ class Orchestrator(
         if (gameState.status != GameStatus.NOT_STARTED
                 && gameState.status != GameStatus.IN_PROGRESS
                 && gameState.status != GameStatus.DRAW_OFFERED) {
-            endGame(result = gameState.result.protocolString, reason = gameState.status.name.lowercase())
+            endGame(result = gameState.result, termination = Termination.Other())
             return
         }
 
@@ -272,7 +277,10 @@ class Orchestrator(
         }
     }
 
-    internal suspend fun endGame(result: String = "*", reason: String = "") {
+    internal suspend fun endGame(
+        result: GameResult = GameResult.IN_PROGRESS,
+        termination: Termination = Termination.Other(),
+    ) {
         val s = session
         if (s != null) {
             val history = gameController.getHistory(s.gameId).getOrNull()
@@ -285,7 +293,7 @@ class Orchestrator(
                 playerColor = s.playerColor,
                 timeControl = s.timeControl,
                 result = result,
-                reason = reason,
+                termination = termination,
                 finalFen = gameState?.fen ?: "",
                 moves = history?.moves ?: emptyList(),
             )

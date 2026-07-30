@@ -90,8 +90,8 @@ sealed class GameError(val code: String, val message: String) {
 
 data class GameEndedEvent(
     val gameId: String,
-    val result: String,
-    val reason: String,
+    val result: GameResult,
+    val termination: Termination,
     val fen: String,
 )
 
