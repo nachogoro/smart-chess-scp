@@ -39,6 +39,23 @@ fun parseUciMove(uci: String, game: Game): Move? {
     }
 }
 
+/**
+ * Whether [uci] moves a piece belonging to the side that is not to move.
+ *
+ * False for a move whose origin square is empty or unreadable: that is not a turn-order problem,
+ * and [parseUciMove] refuses it as illegal along with everything else it cannot match.
+ */
+fun movesWrongSide(game: Game, uci: String): Boolean {
+    if (uci.length < 2) return false
+    val from = try {
+        Square.fromString(uci.take(2))
+    } catch (_: IllegalArgumentException) {
+        return false
+    }
+    val piece = game.currentPosition.board[from] ?: return false
+    return piece.color != game.activeColor
+}
+
 fun chessColorToScp(color: ChessColor): ScpColor = when (color) {
     ChessColor.WHITE -> ScpColor.WHITE
     ChessColor.BLACK -> ScpColor.BLACK

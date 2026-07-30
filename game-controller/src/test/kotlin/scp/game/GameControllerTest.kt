@@ -504,6 +504,33 @@ class GameControllerTest {
         assertEquals(GameStatus.STALEMATE, result.value.status)
     }
 
+    // -- Turn order and draw offers --
+
+    @Test
+    fun `a move by the wrong side is refused as out of turn`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc)
+
+        // Black moves while it is white's turn.
+        val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e7e5"))
+
+        val error = assertIs<Result.Failure<GameError>>(result).error
+        // Not ILLEGAL_MOVE: the rules engine only ever offers moves for the side to move, so
+        // asking it makes the two indistinguishable - and only one of them is the player's doing.
+        assertIs<GameError.NotYourTurn>(error)
+    }
+
+    @Test
+    fun `a move that is simply illegal is still ILLEGAL_MOVE`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc)
+
+        // White's own piece, nowhere it can go.
+        val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e1e5"))
+
+        assertIs<GameError.IllegalMove>(assertIs<Result.Failure<GameError>>(result).error)
+    }
+
     // -- Clock management --
 
     @Test

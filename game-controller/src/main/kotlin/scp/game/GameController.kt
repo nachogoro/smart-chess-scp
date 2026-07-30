@@ -85,6 +85,14 @@ class GameController(
             return Result.Failure(GameError.GameOver())
         }
 
+        // Its own code rather than ILLEGAL_MOVE. Both refuse the move, but only one of them is
+        // something the player can do anything about, and a UI cannot tell them apart from the
+        // rules engine's answer alone: it only ever offers moves for the side to move, so a move
+        // by the wrong side looks exactly like one that is not legal.
+        if (movesWrongSide(game.chessGame, params.move)) {
+            return Result.Failure(GameError.NotYourTurn())
+        }
+
         // Clear any pending draw offer on move submission
         if (game.status == GameStatus.DRAW_OFFERED) {
             game.drawOffer = null
