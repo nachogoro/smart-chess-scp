@@ -248,7 +248,7 @@ class LichessAdapter(
      *   and conditionally `opponent_name`, `ai_level`, `rated`.
      */
     override suspend fun seekGame(settings: Map<String, Any>): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
 
         val opponentType = settings[PARAM_OPPONENT_TYPE] as? String ?: "random"
         val time = (settings[PARAM_TIME] as? Number)?.toInt() ?: 15
@@ -318,7 +318,7 @@ class LichessAdapter(
      * @param move UCI move string (e.g. `"e2e4"`, `"e7e8q"`).
      */
     override suspend fun sendMove(move: String): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
         val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
@@ -333,7 +333,7 @@ class LichessAdapter(
 
     /** Resigns the current game. */
     override suspend fun resign(): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
         val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
@@ -346,7 +346,7 @@ class LichessAdapter(
 
     /** Aborts the current game, which Lichess allows only within its first moves. */
     override suspend fun abort(): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
         val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
@@ -359,7 +359,7 @@ class LichessAdapter(
 
     /** Offers a draw to the opponent in the current game. */
     override suspend fun offerDraw(): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
         val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {
@@ -376,7 +376,7 @@ class LichessAdapter(
      * @param accept True to accept the draw, false to decline.
      */
     override suspend fun respondDraw(accept: Boolean): Result<RemoteError, Unit> {
-        val t = token ?: return Result.Failure(RemoteError.NotConnected())
+        val t = token ?: return Result.Failure(RemoteError.NotConfigured())
         val gameId = currentGameId ?: return Result.Failure(RemoteError.NoActiveGame())
 
         return try {

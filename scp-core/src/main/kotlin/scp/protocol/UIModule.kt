@@ -103,7 +103,7 @@ data class ShowOpponentMoveParams(
 )
 
 sealed class UIError(override val code: String) : ModuleError {
-    class Cancelled : UIError("CANCELLED")
+    class UserCancelled : UIError("USER_CANCELLED")
     class Timeout : UIError("TIMEOUT")
 }
 

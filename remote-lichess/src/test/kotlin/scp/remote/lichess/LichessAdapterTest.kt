@@ -313,7 +313,7 @@ class LichessAdapterTest {
 
         val result = adapter.seekGame(mapOf("time" to 15))
         assertIs<Result.Failure<RemoteError>>(result)
-        assertIs<RemoteError.NotConnected>(result.error)
+        assertIs<RemoteError.NotConfigured>(result.error)
     }
 
     // -- Game stream: gameStarted --
@@ -925,6 +925,6 @@ class LichessAdapterTest {
         // After disconnect, operations should fail
         val seekResult = adapter.seekGame(mapOf("time" to 15))
         assertIs<Result.Failure<RemoteError>>(seekResult)
-        assertIs<RemoteError.NotConnected>(seekResult.error)
+        assertIs<RemoteError.NotConfigured>(seekResult.error)
     }
 }

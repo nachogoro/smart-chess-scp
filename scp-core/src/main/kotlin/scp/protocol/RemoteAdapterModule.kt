@@ -82,7 +82,13 @@ sealed class RemoteError(
     /** [parameter] is the descriptor's name, so a UI can point at the field. */
     class InvalidParams(val parameter: String? = null) : RemoteError("INVALID_PARAMS")
 
-    class NotConnected : RemoteError("NOT_CONNECTED")
+    /**
+     * An operational request arrived before the configuration handshake completed.
+     *
+     * Named for the handshake rather than the connection because that is what §5 requires be
+     * reported, and what a caller has to do about it: configure, not reconnect.
+     */
+    class NotConfigured : RemoteError("NOT_CONFIGURED")
 
     /** No game is in progress on the platform, so there is nothing to act on. */
     class NoActiveGame : RemoteError("NO_ACTIVE_GAME")

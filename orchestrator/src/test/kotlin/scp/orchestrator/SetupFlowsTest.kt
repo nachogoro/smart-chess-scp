@@ -68,7 +68,7 @@ class SetupFlowsTest {
         val orchestrator = createOrchestrator()
         launchOrchestrator(orchestrator)
 
-        ui.selectGameModeResponse = Result.Failure(UIError.Cancelled())
+        ui.selectGameModeResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertIs<OrchestratorState.Idle>(orchestrator.state)
@@ -83,7 +83,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
-        ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureLocalGameResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertIs<OrchestratorState.Idle>(orchestrator.state)
@@ -103,7 +103,7 @@ class SetupFlowsTest {
         ui.configureLocalGameResponses = mutableListOf(
             Result.Success(LocalGameConfig("White", "Black", null)),
         )
-        ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureLocalGameResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertEquals("DISCONNECTED", assertIs<UIMessage.BoardCapabilitiesUnavailable>(ui.lastConfigureLocalError).error.code)
@@ -122,7 +122,7 @@ class SetupFlowsTest {
         ui.configureLocalGameResponses = mutableListOf(
             Result.Success(LocalGameConfig("White", "Black", null)),
         )
-        ui.configureLocalGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureLocalGameResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertEquals("GAME_NOT_FOUND", assertIs<UIMessage.GameCreationFailed>(ui.lastConfigureLocalError).error.code)
@@ -185,7 +185,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.ENGINE)
-        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureEngineGameResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertIs<OrchestratorState.Idle>(orchestrator.state)
@@ -203,7 +203,7 @@ class SetupFlowsTest {
         ui.configureEngineGameResponses = mutableListOf(
             Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
-        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureEngineGameResponse = Result.Failure(UIError.UserCancelled())
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
@@ -222,7 +222,7 @@ class SetupFlowsTest {
         ui.configureEngineGameResponses = mutableListOf(
             Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
-        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureEngineGameResponse = Result.Failure(UIError.UserCancelled())
         gc.createFail = GameError.GameNotFound()
         ui.emitNewGameRequested()
 
@@ -257,7 +257,7 @@ class SetupFlowsTest {
         ui.configureEngineGameResponses = mutableListOf(
             Result.Success(EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)),
         )
-        ui.configureEngineGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureEngineGameResponse = Result.Failure(UIError.UserCancelled())
         engine.configureFail = EngineError.NotConfigured()
         ui.emitNewGameRequested()
 
@@ -341,7 +341,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
-        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureRemoteGameResponse = Result.Failure(UIError.UserCancelled())
         ui.emitNewGameRequested()
 
         assertIs<OrchestratorState.Idle>(orchestrator.state)
@@ -359,7 +359,7 @@ class SetupFlowsTest {
         ui.configureRemoteGameResponses = mutableListOf(
             Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
         )
-        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureRemoteGameResponse = Result.Failure(UIError.UserCancelled())
         board.failWith = BoardError.Disconnected()
         ui.emitNewGameRequested()
 
@@ -375,7 +375,7 @@ class SetupFlowsTest {
         launchOrchestrator(orchestrator)
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
-        remote.capabilitiesFail = RemoteError.NotConnected()
+        remote.capabilitiesFail = RemoteError.NotConfigured()
         ui.emitNewGameRequested()
 
         assertEquals(UIMessage.RemoteCapabilitiesUnavailable, ui.lastError)
@@ -394,7 +394,7 @@ class SetupFlowsTest {
         ui.configureRemoteGameResponses = mutableListOf(
             Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
         )
-        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureRemoteGameResponse = Result.Failure(UIError.UserCancelled())
         remote.configureFail = RemoteError.AuthFailed()
         ui.emitNewGameRequested()
 
@@ -413,7 +413,7 @@ class SetupFlowsTest {
         ui.configureRemoteGameResponses = mutableListOf(
             Result.Success(RemoteGameConfig(platformSettings = emptyMap(), seekSettings = emptyMap())),
         )
-        ui.configureRemoteGameResponse = Result.Failure(UIError.Cancelled())
+        ui.configureRemoteGameResponse = Result.Failure(UIError.UserCancelled())
         remote.seekFail = RemoteError.InvalidParams("time")
         ui.emitNewGameRequested()
 
@@ -463,7 +463,7 @@ class SetupFlowsTest {
             EngineGameConfig(playerColor = Color.WHITE, playerName = "Player", engineSettings = emptyMap(), timeControl = null)
         )
         // selectEngineResponse should not be called for single engine
-        ui.selectEngineResponse = Result.Failure(UIError.Cancelled())
+        ui.selectEngineResponse = Result.Failure(UIError.UserCancelled())
 
         ui.emitNewGameRequested()
 
@@ -543,7 +543,7 @@ class SetupFlowsTest {
 
         ui.selectGameModeResponse = Result.Success(GameMode.REMOTE)
         // selectRemotePlatformResponse should not be called for single remote
-        ui.selectRemotePlatformResponse = Result.Failure(UIError.Cancelled())
+        ui.selectRemotePlatformResponse = Result.Failure(UIError.UserCancelled())
 
         ui.emitNewGameRequested()
 
