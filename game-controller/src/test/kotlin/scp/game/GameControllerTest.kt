@@ -524,6 +524,60 @@ class GameControllerTest {
     }
 
     @Test
+    fun `a move made after the flag ends the game on time`() = runTest {
+        val timeSource = FakeTimeSource(0L)
+        val gc = GameController(backgroundScope, timeSource)
+        val endings = mutableListOf<GameEndedEvent>()
+        val collector = launch { gc.gameEnded.collect { endings.add(it) } }
+
+        val tc = TimeControl(TimeControlType.FISCHER, initialMs = 1000, incrementMs = 5000)
+        val gameId = createGame(gc, timeControl = tc)
+
+        // White thinks for three seconds on a one second clock. The flag-fall timer is a
+        // coroutine and has not resumed, so the move is what discovers the overrun.
+        timeSource.advance(3000)
+        val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4"))
+
+        assertIs<Result.Failure<GameError>>(result)
+        assertIs<GameError.GameOver>(result.error)
+        advanceUntilIdle()
+
+        val state = gc.getState(gameId)
+        assertIs<Result.Success<GameState>>(state)
+        assertEquals(GameStatus.TIMEOUT, state.value.status)
+        assertEquals(GameResult.BLACK_WINS, state.value.result)
+        // The increment used to be added to the overrun, leaving white better off than they
+        // started: 1000 - 3000 + 5000 = 3000.
+        assertEquals(0, state.value.clocks!!.whiteMs)
+        assertEquals(Termination.Timeout, endings.single().termination)
+
+        collector.cancel()
+    }
+
+    @Test
+    fun `a clock is never left negative or topped up past zero`() = runTest {
+        val tc = TimeControl(TimeControlType.FISCHER, initialMs = 1000, incrementMs = 5000)
+        val after = computeClockAfterMove(
+            clocks = Clocks(whiteMs = 1000, blackMs = 60000),
+            timeControl = tc,
+            elapsedMs = 3000,
+            movingColor = Color.WHITE,
+        )
+        assertEquals(0, after.whiteMs)
+        assertEquals(60000, after.blackMs)
+    }
+
+    @Test
+    fun `a none time control tracks no clocks`() = runTest {
+        val gc = GameController(backgroundScope)
+        val gameId = createGame(gc, timeControl = TimeControl(TimeControlType.NONE, initialMs = 0))
+
+        val state = gc.getState(gameId)
+        assertIs<Result.Success<GameState>>(state)
+        assertNull(state.value.clocks, "a `none` time control is the absence of one")
+    }
+
+    @Test
     fun `bronstein increment caps at pre-move time`() = runTest {
         val timeSource = FakeTimeSource(0L)
         val gc = GameController(backgroundScope, timeSource)

@@ -12,7 +12,11 @@ class InternalGame(
 ) {
     var status: GameStatus = GameStatus.NOT_STARTED
     var result: GameResult = GameResult.IN_PROGRESS
-    var clocks: Clocks? = timeControl?.let { Clocks(it.initialMs, it.initialMs) }
+    // A `none` time control is the absence of one, so there are no clocks to track (PROTOCOL.md
+    // §4.2). Building a pair of them anyway left every untimed game reporting a frozen 00:00.
+    var clocks: Clocks? = timeControl
+        ?.takeIf { it.type != TimeControlType.NONE }
+        ?.let { Clocks(it.initialMs, it.initialMs) }
     var drawOffer: Color? = null
     val moveHistory: MutableList<GameHistoryMove> = mutableListOf()
     var turnStartedAt: Long = 0L

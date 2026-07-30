@@ -74,6 +74,17 @@ class GameController(
 
         if (game.isOver) return Result.Failure(GameError.GameOver())
 
+        // The flag may have fallen while this move was being made. The timer that reports it is a
+        // coroutine, and nothing guarantees it resumed before the move arrived - so the clock
+        // decides, not whether a timer happened to fire first. Without this a player whose time
+        // had run out could keep moving indefinitely, because each move cancels and re-arms the
+        // timer and a clock already at zero never arms one at all.
+        flagFallBeforeMove(game)?.let { flagged ->
+            _flagFall.emit(FlagFallEvent(gameId = game.id, color = flagged))
+            endOnTime(game, flagged)
+            return Result.Failure(GameError.GameOver())
+        }
+
         // Clear any pending draw offer on move submission
         if (game.status == GameStatus.DRAW_OFFERED) {
             game.drawOffer = null
@@ -374,6 +385,59 @@ class GameController(
             }
         }
 
+    /**
+     * The colour whose clock has already run out, if the side to move has no time left.
+     *
+     * Only meaningful under [Authority.LOCAL] with a time control: in `external` mode the remote
+     * server is the timekeeper and this controller must not decide a game on time (§4.2).
+     */
+    private fun flagFallBeforeMove(game: InternalGame): Color? {
+        if (game.authority != Authority.LOCAL) return null
+        val clocks = game.clocks ?: return null
+        if (game.timeControl == null) return null
+
+        val mover = game.turn
+        val remaining = when (mover) {
+            Color.WHITE -> clocks.whiteMs
+            Color.BLACK -> clocks.blackMs
+        }
+        val elapsed = timeSource.currentTimeMs() - game.turnStartedAt
+        return if (elapsed >= remaining) mover else null
+    }
+
+    /**
+     * Ends [game] because [color] ran out of time.
+     *
+     * FIDE 6.9: the player whose flag fell loses, unless their opponent cannot checkmate with the
+     * material left, in which case the game is drawn. `drawClaimReason` is evaluated for the side
+     * to move - which at a flag fall is the flagged player - so `OpponentInsufficientMaterial`
+     * answers exactly that question.
+     */
+    private suspend fun endOnTime(game: InternalGame, color: Color) {
+        game.timerJob?.cancel()
+
+        game.clocks = when (color) {
+            Color.WHITE -> game.clocks?.copy(whiteMs = 0)
+            Color.BLACK -> game.clocks?.copy(blackMs = 0)
+        }
+
+        val claimReason = game.chessGame.drawClaimReason
+        val opponentCannotMate = claimReason == DrawReason.INSUFFICIENT_MATERIAL
+            || claimReason == DrawReason.OPPONENT_INSUFFICIENT_MATERIAL
+
+        game.status = GameStatus.TIMEOUT
+        if (opponentCannotMate) {
+            game.result = GameResult.DRAW
+            emitGameEnded(game, Termination.Drawn(DrawKind.InsufficientMaterial))
+        } else {
+            game.result = when (color) {
+                Color.WHITE -> GameResult.BLACK_WINS
+                Color.BLACK -> GameResult.WHITE_WINS
+            }
+            emitGameEnded(game, Termination.Timeout)
+        }
+    }
+
     private fun startFlagFallTimer(game: InternalGame) {
         game.timerJob?.cancel()
 
@@ -395,33 +459,8 @@ class GameController(
             if (currentGame.isOver) return@launch
             if (currentGame.turn != color) return@launch
 
-            // Flag fall
             _flagFall.emit(FlagFallEvent(gameId = gameId, color = color))
-
-            // Update clocks to reflect timeout
-            currentGame.clocks = when (color) {
-                Color.WHITE -> currentGame.clocks?.copy(whiteMs = 0)
-                Color.BLACK -> currentGame.clocks?.copy(blackMs = 0)
-            }
-
-            // FIDE 6.9: if the opponent has insufficient mating material, it's a draw
-            val claimReason = currentGame.chessGame.drawClaimReason
-            val insufficientMaterial =
-                claimReason == DrawReason.INSUFFICIENT_MATERIAL
-                    || claimReason == DrawReason.OPPONENT_INSUFFICIENT_MATERIAL
-
-            if (insufficientMaterial) {
-                currentGame.status = GameStatus.TIMEOUT
-                currentGame.result = GameResult.DRAW
-                emitGameEnded(currentGame, Termination.Drawn(DrawKind.InsufficientMaterial))
-            } else {
-                currentGame.status = GameStatus.TIMEOUT
-                currentGame.result = when (color) {
-                    Color.WHITE -> GameResult.BLACK_WINS
-                    Color.BLACK -> GameResult.WHITE_WINS
-                }
-                emitGameEnded(currentGame, Termination.Timeout)
-            }
+            endOnTime(currentGame, color)
         }
     }
 
