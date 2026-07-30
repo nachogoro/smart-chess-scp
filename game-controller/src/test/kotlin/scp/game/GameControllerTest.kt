@@ -1,6 +1,7 @@
 package scp.game
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -516,6 +517,58 @@ class GameControllerTest {
         val result = gc.submitMove(SubmitMoveParams(gameId = gameId, move = "b6c7"))
         assertIs<Result.Success<SubmitMoveResult>>(result)
         assertEquals(GameStatus.STALEMATE, result.value.status)
+    }
+
+    // -- Retention and concurrency --
+
+    @Test
+    fun `finished games are eventually forgotten, and live ones never are`() = runTest {
+        val gc = GameController(backgroundScope)
+
+        // A game that is still being played, created first so it is the oldest of them all.
+        val live = createGame(gc)
+
+        // Then more finished games than the controller keeps.
+        val finished = (1..40).map { createGame(gc).also { id -> gc.resign(id, Color.WHITE) } }
+
+        // The live one survives however many games are played around it.
+        assertIs<Result.Success<GameState>>(gc.getState(live))
+
+        // The oldest finished ones are gone; the most recent are still readable, because a caller
+        // reads the history and the final position after a game ends.
+        assertIs<Result.Failure<GameError>>(gc.getState(finished.first()))
+        assertIs<Result.Success<GameState>>(gc.getState(finished.last()))
+    }
+
+    @Test
+    fun `a move and the flag falling do not both end the game`() = runTest {
+        // A single test dispatcher cannot reproduce a data race, so this pins the outcome rather
+        // than the memory model: whichever of the two gets there first, the game ends once and
+        // its result agrees with its status. The lock is what makes that hold when the timer and
+        // the move really are on different threads, which they are as soon as the controller is
+        // given a scope backed by more than one.
+        repeat(40) {
+            val timeSource = FakeTimeSource(0L)
+            val gc = GameController(backgroundScope, timeSource)
+            val endings = mutableListOf<GameEndedEvent>()
+            val collector = launch { gc.gameEnded.collect { endings.add(it) } }
+
+            val tc = TimeControl(TimeControlType.FISCHER, initialMs = 1_000, incrementMs = 0)
+            val gameId = createGame(gc, timeControl = tc)
+
+            // The clock says the flag has fallen, and a move arrives at the same moment.
+            timeSource.advance(1_000)
+            val moved = async { gc.submitMove(SubmitMoveParams(gameId = gameId, move = "e2e4")) }
+            advanceUntilIdle()
+            moved.await()
+
+            // Whichever won, the game ended exactly once and agrees with itself.
+            val state = assertIs<Result.Success<GameState>>(gc.getState(gameId)).value
+            assertEquals(GameStatus.TIMEOUT, state.status)
+            assertEquals(1, endings.count { it.gameId == gameId }, "ended more than once")
+            assertEquals(GameResult.BLACK_WINS, state.result)
+            collector.cancel()
+        }
     }
 
     // -- Turn order and draw offers --
