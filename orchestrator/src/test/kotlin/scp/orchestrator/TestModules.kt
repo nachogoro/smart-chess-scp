@@ -201,7 +201,12 @@ class FakeUIModule : UIModule {
     override suspend fun promptPromotion(move: String, color: Color) = promptPromotionResponse
     override suspend fun promptMoveDisambiguation(moves: List<String>, color: Color) = promptDisambiguationResponse
 
-    override suspend fun promptDrawResponse(gameId: String, from: String) = promptDrawResponseResult
+    var lastDrawResponsePrompt: Pair<String, String>? = null
+
+    override suspend fun promptDrawResponse(gameId: String, from: String): Result<UIError, Boolean> {
+        lastDrawResponsePrompt = gameId to from
+        return promptDrawResponseResult
+    }
 
     var seekingGameNotified = false
 

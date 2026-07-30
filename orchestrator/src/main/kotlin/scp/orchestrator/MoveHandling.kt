@@ -170,6 +170,16 @@ internal suspend fun Orchestrator.handleDrawRequested(gameId: String) {
         GameMode.LOCAL -> {
             val turnColor = (state as? OrchestratorState.AwaitingPlayerMove)?.color ?: return
             gameController.offerDraw(s.gameId, turnColor)
+
+            // Both players share one screen, so the opponent is asked outright rather than left an
+            // offer to discover. Leaving it pending would mean the next Draw tap agreed the draw
+            // with no confirmation - including a second tap from the player who offered it.
+            val offeredBy = when (turnColor) {
+                Color.WHITE -> s.whiteName ?: "White"
+                Color.BLACK -> s.blackName ?: "Black"
+            }
+            val accepted = ui.promptDrawResponse(s.gameId, offeredBy).getOrNull() ?: false
+            gameController.respondDraw(s.gameId, accepted)
         }
         GameMode.ENGINE -> {
             ui.displayError("Draw offers are not supported against the engine")

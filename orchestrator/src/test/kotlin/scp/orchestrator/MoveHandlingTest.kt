@@ -405,6 +405,55 @@ class MoveHandlingTest {
         orchestrator.stop()
     }
 
+    /** A game controller that refuses draw claims, so the offer path is the one exercised. */
+    private fun claimRejectingController() = object : FakeGameControllerModule() {
+        override suspend fun claimDraw(gameId: String): Result<GameError, Unit> {
+            lastDrawClaim = gameId
+            return Result.Failure(GameError.InvalidClaim())
+        }
+    }
+
+    @Test
+    fun `local draw offer is put to the opponent and agreed when accepted`() =
+        runTest(UnconfinedTestDispatcher()) {
+            val controller = claimRejectingController()
+            gc = controller
+            ui.promptDrawResponseResult = Result.Success(true)
+            val orchestrator = createOrchestrator()
+            launchOrchestrator(orchestrator)
+            ui.emitNewGameRequested()
+            val gameId = orchestrator.session!!.gameId
+
+            ui.emitDrawRequested(gameId)
+
+            // White is to move at the start, so the dialog names White as the offering player and
+            // asks the person sitting on the other side of the board.
+            assertEquals(gameId to "White", ui.lastDrawResponsePrompt)
+            assertEquals(gameId to true, controller.lastDrawResponse)
+
+            orchestrator.stop()
+        }
+
+    @Test
+    fun `local draw offer declined leaves the game running`() = runTest(UnconfinedTestDispatcher()) {
+        val controller = claimRejectingController()
+        gc = controller
+        ui.promptDrawResponseResult = Result.Success(false)
+        val orchestrator = createOrchestrator()
+        launchOrchestrator(orchestrator)
+        ui.emitNewGameRequested()
+        val gameId = orchestrator.session!!.gameId
+
+        ui.emitDrawRequested(gameId)
+
+        assertNotNull(ui.lastDrawResponsePrompt)
+        // Answered rather than left pending: the offer must not survive to be accepted by a later
+        // stray Draw tap.
+        assertEquals(gameId to false, controller.lastDrawResponse)
+
+        orchestrator.stop()
+    }
+
     @Test
     fun `draw request accepts pending draw offer when claim fails`() = runTest(UnconfinedTestDispatcher()) {
         val drawOfferedGc = object : FakeGameControllerModule() {
