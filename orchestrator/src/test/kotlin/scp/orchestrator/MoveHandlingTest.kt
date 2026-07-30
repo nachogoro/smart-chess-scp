@@ -104,6 +104,30 @@ class MoveHandlingTest {
     }
 
     @Test
+    fun `session carries the position after the player's own move`() = runTest(UnconfinedTestDispatcher()) {
+        // Nothing notifies the UI of a move the player made themselves, so a UI drawing the
+        // position has only the session to read it from.
+        val orchestrator = startLocalGame()
+        val gameId = orchestrator.session!!.gameId
+        assertEquals(startFen, orchestrator.session!!.fen)
+
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            BoardCapabilityLevel.FULL,
+        )
+        ui.emitMoveReady(gameId)
+
+        // No en passant target in the result: the rules library records one only where a capture
+        // could actually use it, and after 1.e4 no black pawn can.
+        assertEquals(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+            orchestrator.session!!.fen,
+        )
+
+        orchestrator.stop()
+    }
+
+    @Test
     fun `board desync triggers ui notification`() = runTest(UnconfinedTestDispatcher()) {
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
