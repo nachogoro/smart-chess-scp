@@ -136,8 +136,8 @@ class GameController(
         val gameAfterMove = moveResult.getOrNull()
             ?: return Result.Failure(GameError.IllegalMove(params.move))
 
-        // Get SAN from the last played move in the new game's history
-        val playedMove = gameAfterMove.history.last().second
+        // The move as the library recorded it, which is what carries the algebraic notation.
+        val playedMove = gameAfterMove.history.last().move
         val san = playedMove.algebraicNotation
 
         // Update clocks

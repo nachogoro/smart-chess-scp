@@ -88,7 +88,7 @@ open class FakeGameControllerModule : GameControllerModule {
         val move = game.availableMoves.first { moveToUci(it) == params.move }
         val afterGame = game.makeMove(move).getOrThrow()
         val newFen = afterGame.currentPosition.fen
-        val san = afterGame.history.last().second.algebraicNotation
+        val san = afterGame.history.last().move.algebraicNotation
         val newState = state.copy(fen = newFen, turn = newTurn, moves = state.moves + params.move)
         games[params.gameId] = newState
         return Result.Success(SubmitMoveResult(fen = newFen, san = san, status = GameStatus.IN_PROGRESS, clocks = state.clocks))

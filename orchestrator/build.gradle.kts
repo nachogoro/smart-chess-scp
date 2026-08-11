@@ -1,6 +1,6 @@
 dependencies {
     implementation(project(":scp-core"))
-    implementation("io.github.nachogoro:simplechess:1.1.1")
+    implementation("io.github.nachogoro:simplechess:2.0.0")
 
     // Tests only. The orchestrator does not depend on any particular game controller - it is
     // written against the interface - but testing it exclusively against a stand-in leaves the
