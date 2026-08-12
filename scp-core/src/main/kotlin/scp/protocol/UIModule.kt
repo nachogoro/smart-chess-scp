@@ -99,7 +99,30 @@ data class ShowOpponentMoveParams(
     val clocks: Clocks?,
     /** See [SubmitMoveResult.isEnPassant]: the player must clear a square the move does not name. */
     val isEnPassant: Boolean = false,
+    /** What the player still has to do to the physical board, if anything. */
+    val boardUpdate: BoardUpdate = BoardUpdate.MANUAL,
 )
+
+/**
+ * How much of an opponent's move the board played by itself.
+ *
+ * A closed enum, since the protocol can name every case. [MANUAL] is the default because it is
+ * what a board that does not move pieces leaves behind, and what every board left behind before
+ * any of them could. What to say about each is the UI's, as ever.
+ */
+enum class BoardUpdate {
+    /** Nothing. The board does not actuate, or was not asked, or could not be. */
+    MANUAL,
+
+    /**
+     * Some of it. The player finishes: placing a promoted piece the board could not supply, or
+     * repairing a move it gave up partway through.
+     */
+    PARTIAL,
+
+    /** All of it. Nothing is left for the player to do. */
+    COMPLETE,
+}
 
 sealed class UIError(override val code: String) : ModuleError {
     class UserCancelled : UIError("USER_CANCELLED")
