@@ -273,4 +273,108 @@ class FakeBoardTest {
         val pieces = state.value.squares.values.filterIsInstance<SquareState.OccupiedByPiece>()
         assertEquals(2, pieces.size)
     }
+
+    // -- Moving pieces --
+
+    private suspend fun FakeBoard.squares(): Map<String, SquareState> =
+        assertIs<Result.Success<BoardState>>(getState()).value.squares
+
+    @Test
+    fun `capabilities carry the actuation the board was given`() = runTest {
+        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation(canPlacePieces = true))
+
+        val caps = assertIs<Result.Success<BoardCapabilities>>(board.getCapabilities())
+        assertEquals(BoardActuation(canPlacePieces = true), caps.value.actuation)
+    }
+
+    @Test
+    fun `a board that does not actuate refuses to move pieces`() = runTest {
+        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"))
+
+        assertNull(assertIs<Result.Success<BoardCapabilities>>(board.getCapabilities()).value.actuation)
+        val moved = assertIs<Result.Failure<BoardError>>(board.movePieces(listOf(PieceTransfer.Move("e2", "e4"))))
+        assertEquals("METHOD_NOT_FOUND", moved.error.code)
+    }
+
+    @Test
+    fun `moving a piece rewrites the file`() = runTest {
+        val file = tempBoardFile("full\ne2 wP\ne1 wK\n")
+        val board = FakeBoard(file, BoardActuation())
+
+        assertIs<Result.Success<Unit>>(board.movePieces(listOf(PieceTransfer.Move("e2", "e4"))))
+
+        // Read back through a second board, so the assertion is about the file and not about
+        // anything the first one remembered.
+        val squares = FakeBoard(file).squares()
+        assertEquals(SquareState.Empty, squares["e2"])
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.PAWN, Color.WHITE)), squares["e4"])
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.KING, Color.WHITE)), squares["e1"])
+    }
+
+    @Test
+    fun `a capture is a remove and a move, in that order`() = runTest {
+        val file = tempBoardFile("full\nd5 wP\ne4 bP\n")
+        val board = FakeBoard(file, BoardActuation())
+
+        assertIs<Result.Success<Unit>>(board.movePieces(listOf(
+            PieceTransfer.Remove("e4"),
+            PieceTransfer.Move("d5", "e4"),
+        )))
+
+        val squares = board.squares()
+        assertEquals(SquareState.Empty, squares["d5"])
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.PAWN, Color.WHITE)), squares["e4"])
+    }
+
+    @Test
+    fun `moving from an empty square fails and says how far it got`() = runTest {
+        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation())
+
+        val moved = assertIs<Result.Failure<BoardError>>(board.movePieces(listOf(
+            PieceTransfer.Move("e2", "e4"),
+            PieceTransfer.Move("a1", "a2"),
+        )))
+        val error = assertIs<BoardError.ActuationFailed>(moved.error)
+        assertEquals(1, error.completed)
+    }
+
+    @Test
+    fun `clearing an empty square is not an error`() = runTest {
+        // The board is told which square to empty, not why, and cannot judge whether it should
+        // have been occupied.
+        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation())
+
+        assertIs<Result.Success<Unit>>(board.movePieces(listOf(PieceTransfer.Remove("h7"))))
+    }
+
+    @Test
+    fun `a place transfer is refused by a board with nothing to place`() = runTest {
+        val file = tempBoardFile("full\ne7 wP\n")
+        val board = FakeBoard(file, BoardActuation(canPlacePieces = false))
+
+        val moved = assertIs<Result.Failure<BoardError>>(board.movePieces(listOf(
+            PieceTransfer.Remove("e7"),
+            PieceTransfer.Place(Piece(PieceType.QUEEN, Color.WHITE), "e8"),
+        )))
+        assertEquals("INVALID_PARAMS", moved.error.code)
+
+        // Refused whole: the pawn it could have removed is still standing.
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.PAWN, Color.WHITE)), board.squares()["e7"])
+    }
+
+    @Test
+    fun `a placed piece is written at whatever the level can hold`() = runTest {
+        val full = FakeBoard(tempBoardFile("full\ne7 wP\n"), BoardActuation(canPlacePieces = true))
+        assertIs<Result.Success<Unit>>(full.movePieces(listOf(
+            PieceTransfer.Place(Piece(PieceType.QUEEN, Color.WHITE), "e8"),
+        )))
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.QUEEN, Color.WHITE)), full.squares()["e8"])
+
+        // A board that cannot see what a piece is does not become able to by being handed one.
+        val occupancy = FakeBoard(tempBoardFile("occupancy\ne7\n"), BoardActuation(canPlacePieces = true))
+        assertIs<Result.Success<Unit>>(occupancy.movePieces(listOf(
+            PieceTransfer.Place(Piece(PieceType.QUEEN, Color.WHITE), "e8"),
+        )))
+        assertEquals(SquareState.Occupied(true), occupancy.squares()["e8"])
+    }
 }
