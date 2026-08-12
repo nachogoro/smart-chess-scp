@@ -69,6 +69,18 @@ fun inferMove(fen: String, boardState: BoardState, boardLevel: BoardCapabilityLe
     return InferenceOutcome.Ambiguous(matching.map { moveToUci(it) })
 }
 
+/**
+ * Whether the board is showing [fen], as far as [level] can tell.
+ *
+ * Named for the question it answers rather than reached through [inferMove], whose `Unchanged` is
+ * the right answer to a different one: that the player has not moved yet, not that the pieces are
+ * where some other position wants them.
+ */
+fun boardShows(fen: String, boardState: BoardState, level: BoardCapabilityLevel): Boolean {
+    val game = Game.fromFen(fen).getOrNull() ?: return false
+    return boardMatches(game.currentPosition.board, boardState, level)
+}
+
 private fun boardMatches(
     resultBoard: Map<Square, ChessPiece>,
     physicalBoard: BoardState,
