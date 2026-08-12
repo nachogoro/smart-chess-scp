@@ -683,4 +683,143 @@ class MoveHandlingTest {
 
         orchestrator.stop()
     }
+
+    // -----------------------------------------------------------------------
+    // Board actuation
+    // -----------------------------------------------------------------------
+
+    /** Plays the player's e2e4 from the board and lets the engine answer with [engineMove]. */
+    private suspend fun CoroutineScope.playerMoveThenEngine(engineMove: String): Orchestrator {
+        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+        val gameId = orchestrator.session!!.gameId
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            BoardCapabilityLevel.FULL,
+        )
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = engineMove))
+        ui.emitMoveReady(gameId)
+        return orchestrator
+    }
+
+    @Test
+    fun `an engine move is played on a board that can move the pieces`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = true))
+        val orchestrator = playerMoveThenEngine("e7e5")
+
+        assertEquals(listOf<PieceTransfer>(PieceTransfer.Move("e7", "e5")), board.actuated.single())
+        assertEquals(BoardUpdate.COMPLETE, ui.lastOpponentMove!!.boardUpdate)
+        // The point of actuating: the board is left in a state the next inference works from.
+        assertTrue(boardShows(ui.lastOpponentMove!!.fen, board.boardState, BoardCapabilityLevel.FULL))
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a board that only senses is not asked to move anything`() = runTest(UnconfinedTestDispatcher()) {
+        // board is left as the default FakeBoardModule, which declares no actuation.
+        val orchestrator = playerMoveThenEngine("e7e5")
+
+        assertTrue(board.actuated.isEmpty())
+        assertEquals(BoardUpdate.MANUAL, ui.lastOpponentMove!!.boardUpdate)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a successful actuation is not read back`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = true))
+        val orchestrator = playerMoveThenEngine("e7e5")
+
+        // One read, for the player's own move. Reading again after every opponent move would only
+        // report sooner a failure the board did not report at all; the player's next signal reads
+        // it anyway.
+        assertEquals(1, board.stateReads)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a promotion on a board with nothing to place is left half done`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = false))
+        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+        val gameId = orchestrator.session!!.gameId
+
+        // Black pawn on b2, white rook on a1: the engine's next move promotes with a capture.
+        val beforeFen = "6k1/8/8/8/8/8/1p5P/R5K1 w - - 0 40"
+        gc.setGameState(GameState(
+            gameId = gameId, fen = beforeFen, moves = emptyList(),
+            status = GameStatus.IN_PROGRESS, turn = Color.WHITE,
+            clocks = null, result = GameResult.IN_PROGRESS,
+        ))
+        board.boardState = boardStateFromFen("6k1/8/8/8/8/7P/1p6/R5K1 b - - 0 40", BoardCapabilityLevel.FULL)
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "b2a1q"))
+        ui.emitMoveReady(gameId)
+
+        // The rook comes off and so does the pawn; the queen is the player's to put down. The pawn
+        // must not be left standing — that is a position that looks legal and is not this game's.
+        assertEquals(
+            listOf(PieceTransfer.Remove("a1"), PieceTransfer.Remove("b2")),
+            board.actuated.single(),
+        )
+        assertEquals(BoardUpdate.PARTIAL, ui.lastOpponentMove!!.boardUpdate)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `an actuation failure is reported as a desync`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = true))
+        board.movePiecesFail = BoardError.ActuationFailed(completed = 0, diagnostic = "jammed")
+        val orchestrator = playerMoveThenEngine("e7e5")
+
+        // The move stands — it was accepted before the board was ever asked to play it. What is
+        // wrong is the physical board, which is the desynchronization the protocol already had.
+        assertEquals("e7e5", gc.lastSubmittedMove!!.move)
+        assertEquals(BoardUpdate.PARTIAL, ui.lastOpponentMove!!.boardUpdate)
+
+        val desync = assertNotNull(ui.lastDesync)
+        assertEquals(ui.lastOpponentMove!!.fen, desync.first)
+        val message = assertIs<UIMessage.BoardFailed>(desync.second)
+        assertEquals("ACTUATION_FAILED", message.error.code)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a board left in the right position after a failure is not called desynchronized`() = runTest(UnconfinedTestDispatcher()) {
+        // A failure to report is not a failure to move, which is why the board is read back rather
+        // than assumed wrong.
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = true))
+        board.movePiecesFail = BoardError.ActuationFailed(completed = 1, diagnostic = "lost count")
+        val orchestrator = startEngineGame(playerColor = Color.WHITE)
+        val gameId = orchestrator.session!!.gameId
+        board.boardState = boardStateFromFen(
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+            BoardCapabilityLevel.FULL,
+        )
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "e7e5"))
+        ui.onShowOpponentMove = {
+            // The pieces did end up where the move left them, the board just could not say so.
+            board.boardState = boardStateFromFen(it.fen, BoardCapabilityLevel.FULL)
+        }
+        ui.emitMoveReady(gameId)
+
+        assertEquals(BoardUpdate.PARTIAL, ui.lastOpponentMove!!.boardUpdate)
+        assertNull(ui.lastDesync)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a remote opponent's move is actuated too`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.FULL, BoardActuation(canPlacePieces = true))
+        val orchestrator = startRemoteGame(Color.BLACK)
+
+        remote.emitOpponentMove(OpponentMoveEvent(move = "e2e4", clocks = null))
+
+        assertEquals(listOf<PieceTransfer>(PieceTransfer.Move("e2", "e4")), board.actuated.single())
+        assertEquals(BoardUpdate.COMPLETE, ui.lastOpponentMove!!.boardUpdate)
+
+        orchestrator.stop()
+    }
 }

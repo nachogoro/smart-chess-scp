@@ -64,6 +64,7 @@ internal suspend fun Orchestrator.setupLocal() {
             gameId = gameId,
             mode = GameMode.LOCAL,
             boardLevel = boardCaps.level,
+            boardActuation = boardCaps.actuation,
             timeControl = config.timeControl,
             whiteName = config.whiteName,
             blackName = config.blackName,
@@ -139,6 +140,7 @@ internal suspend fun Orchestrator.setupEngine() {
             gameId = gameId,
             mode = GameMode.ENGINE,
             boardLevel = boardCaps.level,
+            boardActuation = boardCaps.actuation,
             playerColor = config.playerColor,
             timeControl = config.timeControl,
             whiteName = whiteName,
@@ -206,6 +208,7 @@ internal suspend fun Orchestrator.setupRemote() {
             gameId = "", // Will be set when game starts
             mode = GameMode.REMOTE,
             boardLevel = boardCaps.level,
+            boardActuation = boardCaps.actuation,
             remote = rem,
         )
         startModuleCollectors(session!!)

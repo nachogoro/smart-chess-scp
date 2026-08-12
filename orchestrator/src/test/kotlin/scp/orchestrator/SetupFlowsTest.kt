@@ -571,4 +571,37 @@ class SetupFlowsTest {
 
         orchestrator.stop()
     }
+
+    // -----------------------------------------------------------------------
+    // Board capabilities carried into the session
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `the session carries what the board can actuate`() = runTest(UnconfinedTestDispatcher()) {
+        board = FakeBoardModule(BoardCapabilityLevel.COLOR, BoardActuation(canPlacePieces = true))
+        val orchestrator = createOrchestrator()
+        launchOrchestrator(orchestrator)
+
+        ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
+        ui.emitNewGameRequested()
+
+        val session = assertNotNull(orchestrator.session)
+        assertEquals(BoardCapabilityLevel.COLOR, session.boardLevel)
+        assertEquals(BoardActuation(canPlacePieces = true), session.boardActuation)
+
+        orchestrator.stop()
+    }
+
+    @Test
+    fun `a board that says nothing about moving pieces is taken not to`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = createOrchestrator()
+        launchOrchestrator(orchestrator)
+
+        ui.selectGameModeResponse = Result.Success(GameMode.LOCAL)
+        ui.emitNewGameRequested()
+
+        assertNull(assertNotNull(orchestrator.session).boardActuation)
+
+        orchestrator.stop()
+    }
 }

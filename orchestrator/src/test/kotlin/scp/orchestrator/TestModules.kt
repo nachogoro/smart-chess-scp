@@ -10,6 +10,7 @@ import scp.protocol.*
 
 class FakeBoardModule(
     private val level: BoardCapabilityLevel = BoardCapabilityLevel.FULL,
+    private val actuation: BoardActuation? = null,
 ) : BoardModule {
     private val _errors = MutableSharedFlow<BoardError>()
     override val errors: SharedFlow<BoardError> = _errors
@@ -17,14 +18,33 @@ class FakeBoardModule(
     var boardState: BoardState = BoardState(emptyMap())
     var failWith: BoardError? = null
 
+    /** Fails [movePieces] with this, leaving [boardState] alone, as a jammed board would. */
+    var movePiecesFail: BoardError? = null
+
+    /** Every list of transfers this board was asked for, in the order it was asked. */
+    val actuated = mutableListOf<List<PieceTransfer>>()
+
+    /** How many times the board has been read, so a test can assert one did not happen. */
+    var stateReads = 0
+        private set
+
     override suspend fun getCapabilities(): Result<BoardError, BoardCapabilities> {
         failWith?.let { return Result.Failure(it) }
-        return Result.Success(BoardCapabilities(level))
+        return Result.Success(BoardCapabilities(level, actuation))
     }
 
     override suspend fun getState(): Result<BoardError, BoardState> {
+        stateReads++
         failWith?.let { return Result.Failure(it) }
         return Result.Success(boardState)
+    }
+
+    override suspend fun movePieces(transfers: List<PieceTransfer>): Result<BoardError, Unit> {
+        if (actuation == null) return super.movePieces(transfers)
+        actuated.add(transfers)
+        movePiecesFail?.let { return Result.Failure(it) }
+        boardState = applyTransfers(boardState, transfers, level)
+        return Result.Success(Unit)
     }
 
     suspend fun emitError(error: BoardError) = _errors.emit(error)
@@ -182,6 +202,9 @@ class FakeUIModule : UIModule {
     var lastGameStartedInfo: GameStartedInfo? = null
     var lastGameSummary: GameSummary? = null
     var lastOpponentMove: ShowOpponentMoveParams? = null
+
+    /** Runs while the notification is up, so a test can act between it and whatever follows. */
+    var onShowOpponentMove: ((ShowOpponentMoveParams) -> Unit)? = null
     var lastError: UIMessage? = null
     var lastDesync: Pair<String, UIMessage>? = null
     var displayErrorCount = 0
@@ -236,6 +259,7 @@ class FakeUIModule : UIModule {
 
     override suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit> {
         lastOpponentMove = params
+        onShowOpponentMove?.invoke(params)
         return Result.Success(Unit)
     }
 

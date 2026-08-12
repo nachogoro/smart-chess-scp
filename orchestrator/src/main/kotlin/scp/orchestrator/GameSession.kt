@@ -6,6 +6,14 @@ data class GameSession(
     val gameId: String,
     val mode: GameMode,
     val boardLevel: BoardCapabilityLevel,
+    /**
+     * What the board said it can do about moving pieces, read once at setup.
+     *
+     * Null when the board only senses, which is every board that does not say otherwise. Kept
+     * beside [boardLevel] rather than replacing it with the whole [BoardCapabilities] because
+     * inference reads the level on every move and the level is all it wants.
+     */
+    val boardActuation: BoardActuation? = null,
     val playerColor: Color? = null,
     val timeControl: TimeControl? = null,
     val clocks: Clocks? = null,

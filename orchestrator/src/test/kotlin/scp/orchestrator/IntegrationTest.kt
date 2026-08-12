@@ -52,6 +52,17 @@ class IntegrationTest {
             show()
         }
 
+        /**
+         * Catches the driver up to [fen] without touching the board.
+         *
+         * Needed once the board moves pieces itself: the driver only knows the moves it was told
+         * to play, and the pieces an actuating board moved are not among them. Leaves
+         * [FakeBoardModule.boardState] alone, so what the board is showing stays the board's.
+         */
+        fun sync(fen: String) {
+            game = ChessGame.fromFen(fen).getOrThrow()
+        }
+
         fun play(uci: String) {
             val move = game.availableMoves.firstOrNull { moveToUci(it) == uci }
                 ?: fail("$uci is not legal in ${game.currentPosition.fen}")
@@ -110,8 +121,9 @@ class IntegrationTest {
         timeControl: TimeControl? = null,
         engines: List<EngineAdapterModule> = emptyList(),
         playerColor: Color = Color.WHITE,
+        actuation: BoardActuation? = null,
     ): Fixture {
-        val board = FakeBoardModule(BoardCapabilityLevel.FULL)
+        val board = FakeBoardModule(BoardCapabilityLevel.FULL, actuation)
         val ui = FakeUIModule()
         val clock = FakeTimeSource()
         val controller = GameController(backgroundScope, clock)
@@ -440,6 +452,72 @@ class IntegrationTest {
         f.driver.play("e7e5")
         f.ui.emitMoveReady(second)
         assertNotNull(f.ui.lastDesync)
+
+        f.orchestrator.stop()
+    }
+
+    // -----------------------------------------------------------------------
+    // A board that moves the pieces itself
+    // -----------------------------------------------------------------------
+
+    @Test
+    fun `an actuating board leaves the position the next move is inferred from`() = runTest(UnconfinedTestDispatcher()) {
+        val engine = FakeEngineModule()
+        val f = startGame(
+            mode = GameMode.ENGINE,
+            engines = listOf(engine),
+            actuation = BoardActuation(canPlacePieces = true),
+        )
+
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "d7d5"))
+        f.playFromBoard("e2e4")
+
+        // The driver played e2e4 and nothing else. Everything the board now shows of black's reply
+        // was put there by the orchestrator.
+        val reply = assertNotNull(f.ui.lastOpponentMove)
+        assertEquals("d7d5", reply.move)
+        assertEquals(BoardUpdate.COMPLETE, reply.boardUpdate)
+        assertTrue(boardShows(reply.fen, f.board.boardState, BoardCapabilityLevel.FULL))
+
+        // And the game goes on from there: the player's next move is inferred against a position
+        // the board reached on its own. This is the property actuation has to have.
+        f.driver.sync(reply.fen)
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "d8d5"))
+        f.playFromBoard("e4d5")
+
+        val state = assertIs<Result.Success<GameState>>(f.controller.getState(f.gameId))
+        assertEquals(listOf("e2e4", "d7d5", "e4d5", "d8d5"), state.value.moves)
+
+        f.orchestrator.stop()
+    }
+
+    @Test
+    fun `an actuated capture takes the captured piece off the board`() = runTest(UnconfinedTestDispatcher()) {
+        val engine = FakeEngineModule()
+        val f = startGame(
+            mode = GameMode.ENGINE,
+            engines = listOf(engine),
+            actuation = BoardActuation(canPlacePieces = true),
+        )
+
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "d7d5"))
+        f.playFromBoard("e2e4")
+        f.driver.sync(assertNotNull(f.ui.lastOpponentMove).fen)
+
+        // The player takes on d5 by hand; the engine recaptures with the queen.
+        engine.bestMoveResponse = Result.Success(BestMoveResult(move = "d8d5"))
+        f.playFromBoard("e4d5")
+
+        assertEquals(
+            listOf(PieceTransfer.Remove("d5"), PieceTransfer.Move("d8", "d5")),
+            f.board.actuated.last(),
+        )
+        // d5 holds the queen that captured, not two pieces and not the pawn that was taken.
+        assertEquals(
+            SquareState.OccupiedByPiece(Piece(PieceType.QUEEN, Color.BLACK)),
+            f.board.boardState.squares["d5"],
+        )
+        assertEquals(SquareState.Empty, f.board.boardState.squares["d8"])
 
         f.orchestrator.stop()
     }

@@ -143,15 +143,14 @@ internal suspend fun Orchestrator.handleEngineMove() {
                     return
                 }
                 is Result.Success -> {
-                    ui.showOpponentMove(ShowOpponentMoveParams(
-                        move = moveUci,
-                        san = submitResult.value.san,
-                        fen = submitResult.value.fen,
+                    deliverOpponentMove(
+                        s = s,
+                        fenBefore = gameState.fen,
+                        uci = moveUci,
                         // gameState was read before the move, so the side to move is the engine.
-                        color = gameState.turn,
-                        clocks = submitResult.value.clocks,
-                        isEnPassant = submitResult.value.isEnPassant,
-                    ))
+                        moverColor = gameState.turn,
+                        submitted = submitResult.value,
+                    )
                     transitionToAwaitingMove()
                 }
             }
@@ -162,9 +161,10 @@ internal suspend fun Orchestrator.handleEngineMove() {
 internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEvent) {
     val s = session ?: return
 
-    // Read before the move is applied: the side to move now is the one making it. Afterwards the
-    // turn has passed back to us and nothing left says whose move this was.
-    val moverColor = gameController.getState(s.gameId).getOrNull()?.turn ?: return
+    // Read before the move is applied: the side to move now is the one making it, and the position
+    // is the one the move is played from. Afterwards the turn has passed back to us and nothing
+    // left says whose move this was, nor which squares it emptied.
+    val before = gameController.getState(s.gameId).getOrNull() ?: return
 
     val submitResult = gameController.submitMove(SubmitMoveParams(
         gameId = s.gameId,
@@ -178,15 +178,73 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
             return
         }
         is Result.Success -> {
-            ui.showOpponentMove(ShowOpponentMoveParams(
-                move = event.move,
-                san = submitResult.value.san,
-                fen = submitResult.value.fen,
-                color = moverColor,
-                clocks = submitResult.value.clocks,
-                isEnPassant = submitResult.value.isEnPassant,
-            ))
+            deliverOpponentMove(
+                s = s,
+                fenBefore = before.fen,
+                uci = event.move,
+                moverColor = before.turn,
+                submitted = submitResult.value,
+            )
             transitionToAwaitingMove()
+        }
+    }
+}
+
+/**
+ * Delivers an opponent's move to the board, where the board can play it, and then to the player.
+ *
+ * The board is asked first because what the player is told depends on what the board managed:
+ * "update the board" is the wrong instruction to give about a board that has already updated
+ * itself, and only half right about one that got most of the way.
+ *
+ * Only the opponent's moves come through here. The player's own has been made by hand before the
+ * orchestrator knows what it was, because knowing what it was means having read it off the board.
+ */
+private suspend fun Orchestrator.deliverOpponentMove(
+    s: GameSession,
+    fenBefore: String,
+    uci: String,
+    moverColor: Color,
+    submitted: SubmitMoveResult,
+) {
+    val decomposition = s.boardActuation?.let { decomposeMove(fenBefore, uci, it.canPlacePieces) }
+
+    var update = BoardUpdate.MANUAL
+    var failure: BoardError? = null
+    if (decomposition != null) {
+        debugLog("[orchestrator] Actuating $uci as ${decomposition.transfers}")
+        when (val moved = board.movePieces(decomposition.transfers)) {
+            is Result.Success -> {
+                update = if (decomposition.leavesPieceToPlace) BoardUpdate.PARTIAL
+                else BoardUpdate.COMPLETE
+            }
+            is Result.Failure -> {
+                debugLog("[orchestrator] Actuation failed: ${moved.error.code}")
+                failure = moved.error
+                update = BoardUpdate.PARTIAL
+            }
+        }
+    }
+
+    ui.showOpponentMove(ShowOpponentMoveParams(
+        move = uci,
+        san = submitted.san,
+        fen = submitted.fen,
+        color = moverColor,
+        clocks = submitted.clocks,
+        isEnPassant = submitted.isEnPassant,
+        boardUpdate = update,
+    ))
+
+    // Only a board that gave up is read back. It has left the pieces somewhere between two
+    // positions and nothing but a read says where — and it may not have moved at all, a failure to
+    // report not being a failure to move. A board that reported success is not read: the player
+    // signalling reads it anyway, and a board one move out of step matches no legal move, which is
+    // the same desynchronization arriving a moment later without a second read after every move.
+    if (failure != null) {
+        val shown = board.getState().getOrNull()
+        if (shown == null || !boardShows(submitted.fen, shown, s.boardLevel)) {
+            ui.boardDesync(submitted.fen, UIMessage.BoardFailed(failure))
         }
     }
 }
