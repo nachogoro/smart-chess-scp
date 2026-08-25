@@ -1,4 +1,4 @@
 dependencies {
     implementation(project(":scp-core"))
-    implementation("io.github.nachogoro:simplechess:2.0.0")
+    implementation("io.github.nachogoro:simplechess:2.1.0")
 }
