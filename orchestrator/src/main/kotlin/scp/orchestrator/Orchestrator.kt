@@ -2,6 +2,9 @@ package scp.orchestrator
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import scp.protocol.*
 
 class Orchestrator(
@@ -14,11 +17,22 @@ class Orchestrator(
     internal val eventChannel = Channel<OrchestratorEvent>(Channel.UNLIMITED)
     internal lateinit var scope: CoroutineScope
 
-    var state: OrchestratorState = OrchestratorState.Idle
-        internal set
+    // State and session are backed by flows so a UI can observe them instead of polling.
+    // The plain properties remain the way the orchestrator itself reads and writes them,
+    // and stay available to callers that want a one-off snapshot.
+    private val _stateFlow = MutableStateFlow<OrchestratorState>(OrchestratorState.Idle)
+    val stateFlow: StateFlow<OrchestratorState> = _stateFlow.asStateFlow()
 
-    var session: GameSession? = null
-        internal set
+    var state: OrchestratorState
+        get() = _stateFlow.value
+        internal set(value) { _stateFlow.value = value }
+
+    private val _sessionFlow = MutableStateFlow<GameSession?>(null)
+    val sessionFlow: StateFlow<GameSession?> = _sessionFlow.asStateFlow()
+
+    var session: GameSession?
+        get() = _sessionFlow.value
+        internal set(value) { _sessionFlow.value = value }
 
     internal var moduleCollectorJobs: List<Job> = emptyList()
 
