@@ -362,6 +362,11 @@ class FakeBoardTest {
         )))
         val error = assertIs<BoardError.ActuationFailed>(moved.error)
         assertEquals(1, error.completed)
+
+        // And the one it managed stays managed: the file agrees with `completed`.
+        val squares = board.squares()
+        assertEquals(SquareState.Empty, squares["e2"])
+        assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.PAWN, Color.WHITE)), squares["e4"])
     }
 
     @Test

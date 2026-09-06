@@ -111,6 +111,10 @@ class FakeBoard(private val filePath: Path) : BoardModule {
                 is PieceTransfer.Move -> {
                     val moving = squares[transfer.from]
                     if (moving == null || moving is SquareState.Empty) {
+                        // The transfers before this one were carried out, and `completed` says so;
+                        // the file has to agree, or a caller reading the board back after the
+                        // failure would find the pieces where they stood before any of them.
+                        writeFile(parsed, squares)
                         return Result.Failure(BoardError.ActuationFailed(
                             completed = index,
                             diagnostic = "${transfer.from} is empty, so nothing could move to ${transfer.to}",
@@ -126,16 +130,20 @@ class FakeBoard(private val filePath: Path) : BoardModule {
             }
         }
 
-        return try {
-            filePath.writeText(render(parsed.level, parsed.actuation, squares))
-            Result.Success(Unit)
-        } catch (e: Exception) {
-            Result.Failure(BoardError.ActuationFailed(
-                completed = transfers.size,
-                diagnostic = "the board file could not be written: ${e.message}",
-            ))
-        }
+        return if (writeFile(parsed, squares)) Result.Success(Unit)
+        else Result.Failure(BoardError.ActuationFailed(
+            completed = transfers.size,
+            diagnostic = "the board file could not be written",
+        ))
     }
+
+    private fun writeFile(parsed: ParsedBoardFile, squares: Map<String, SquareState>): Boolean =
+        try {
+            filePath.writeText(render(parsed.level, parsed.actuation, squares))
+            true
+        } catch (_: Exception) {
+            false
+        }
 
     private fun readFile(): ParsedBoardFile? {
         val lines = try {
