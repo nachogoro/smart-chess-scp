@@ -3,6 +3,7 @@ package scp.board.fake
 import kotlinx.coroutines.test.runTest
 import scp.protocol.*
 import java.nio.file.Files
+import kotlin.io.path.readLines
 import kotlin.io.path.writeText
 import kotlin.test.*
 
@@ -280,11 +281,36 @@ class FakeBoardTest {
         assertIs<Result.Success<BoardState>>(getState()).value.squares
 
     @Test
-    fun `capabilities carry the actuation the board was given`() = runTest {
-        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation(canPlacePieces = true))
+    fun `the first line says whether the board moves pieces`() = runTest {
+        suspend fun actuationOf(header: String): BoardActuation? =
+            assertIs<Result.Success<BoardCapabilities>>(FakeBoard(tempBoardFile("$header\ne2 wP\n")).getCapabilities())
+                .value.actuation
 
-        val caps = assertIs<Result.Success<BoardCapabilities>>(board.getCapabilities())
-        assertEquals(BoardActuation(canPlacePieces = true), caps.value.actuation)
+        assertNull(actuationOf("full"))
+        assertEquals(BoardActuation(canPlacePieces = false), actuationOf("full moves"))
+        assertEquals(BoardActuation(canPlacePieces = true), actuationOf("full moves places"))
+        // A board with pieces to place can put them down, so "places" alone is enough to say so.
+        assertEquals(BoardActuation(canPlacePieces = true), actuationOf("occupancy places"))
+    }
+
+    @Test
+    fun `an unknown word on the first line makes the file unreadable`() = runTest {
+        // A typo should surface, not turn into a board that quietly never moves.
+        val board = FakeBoard(tempBoardFile("full move\ne2 wP\n"))
+
+        val caps = assertIs<Result.Failure<BoardError>>(board.getCapabilities())
+        assertEquals("NOT_READY", caps.error.code)
+    }
+
+    @Test
+    fun `moving pieces keeps what the first line declares`() = runTest {
+        val file = tempBoardFile("occupancy moves places\ne2\n")
+        val board = FakeBoard(file)
+
+        assertIs<Result.Success<Unit>>(board.movePieces(listOf(PieceTransfer.Move("e2", "e4"))))
+
+        assertEquals("occupancy moves places", file.readLines().first())
+        assertEquals(BoardActuation(canPlacePieces = true), assertIs<Result.Success<BoardCapabilities>>(board.getCapabilities()).value.actuation)
     }
 
     @Test
@@ -298,8 +324,8 @@ class FakeBoardTest {
 
     @Test
     fun `moving a piece rewrites the file`() = runTest {
-        val file = tempBoardFile("full\ne2 wP\ne1 wK\n")
-        val board = FakeBoard(file, BoardActuation())
+        val file = tempBoardFile("full moves\ne2 wP\ne1 wK\n")
+        val board = FakeBoard(file)
 
         assertIs<Result.Success<Unit>>(board.movePieces(listOf(PieceTransfer.Move("e2", "e4"))))
 
@@ -313,8 +339,8 @@ class FakeBoardTest {
 
     @Test
     fun `a capture is a remove and a move, in that order`() = runTest {
-        val file = tempBoardFile("full\nd5 wP\ne4 bP\n")
-        val board = FakeBoard(file, BoardActuation())
+        val file = tempBoardFile("full moves\nd5 wP\ne4 bP\n")
+        val board = FakeBoard(file)
 
         assertIs<Result.Success<Unit>>(board.movePieces(listOf(
             PieceTransfer.Remove("e4"),
@@ -328,7 +354,7 @@ class FakeBoardTest {
 
     @Test
     fun `moving from an empty square fails and says how far it got`() = runTest {
-        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation())
+        val board = FakeBoard(tempBoardFile("full moves\ne2 wP\n"))
 
         val moved = assertIs<Result.Failure<BoardError>>(board.movePieces(listOf(
             PieceTransfer.Move("e2", "e4"),
@@ -342,15 +368,15 @@ class FakeBoardTest {
     fun `clearing an empty square is not an error`() = runTest {
         // The board is told which square to empty, not why, and cannot judge whether it should
         // have been occupied.
-        val board = FakeBoard(tempBoardFile("full\ne2 wP\n"), BoardActuation())
+        val board = FakeBoard(tempBoardFile("full moves\ne2 wP\n"))
 
         assertIs<Result.Success<Unit>>(board.movePieces(listOf(PieceTransfer.Remove("h7"))))
     }
 
     @Test
     fun `a place transfer is refused by a board with nothing to place`() = runTest {
-        val file = tempBoardFile("full\ne7 wP\n")
-        val board = FakeBoard(file, BoardActuation(canPlacePieces = false))
+        val file = tempBoardFile("full moves\ne7 wP\n")
+        val board = FakeBoard(file)
 
         val moved = assertIs<Result.Failure<BoardError>>(board.movePieces(listOf(
             PieceTransfer.Remove("e7"),
@@ -364,14 +390,14 @@ class FakeBoardTest {
 
     @Test
     fun `a placed piece is written at whatever the level can hold`() = runTest {
-        val full = FakeBoard(tempBoardFile("full\ne7 wP\n"), BoardActuation(canPlacePieces = true))
+        val full = FakeBoard(tempBoardFile("full moves places\ne7 wP\n"))
         assertIs<Result.Success<Unit>>(full.movePieces(listOf(
             PieceTransfer.Place(Piece(PieceType.QUEEN, Color.WHITE), "e8"),
         )))
         assertEquals(SquareState.OccupiedByPiece(Piece(PieceType.QUEEN, Color.WHITE)), full.squares()["e8"])
 
         // A board that cannot see what a piece is does not become able to by being handed one.
-        val occupancy = FakeBoard(tempBoardFile("occupancy\ne7\n"), BoardActuation(canPlacePieces = true))
+        val occupancy = FakeBoard(tempBoardFile("occupancy moves places\ne7\n"))
         assertIs<Result.Success<Unit>>(occupancy.movePieces(listOf(
             PieceTransfer.Place(Piece(PieceType.QUEEN, Color.WHITE), "e8"),
         )))

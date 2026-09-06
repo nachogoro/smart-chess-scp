@@ -28,7 +28,15 @@ import kotlin.io.path.writeText
  * e8 bK
  * ```
  *
- * **First line**: one of `full`, `color`, or `occupancy`.
+ * **First line**: the capability level, one of `full`, `color`, or `occupancy`, optionally
+ * followed by what the board can do about moving pieces: `moves` if it can move a piece from one
+ * square to another, and `places` if it can also put down a piece that was not on the board. A
+ * first line with neither describes a board that only senses; any other word makes the file
+ * unreadable rather than a quietly non-moving board.
+ *
+ * ```
+ * full moves places
+ * ```
  *
  * **Subsequent lines**: one per occupied square. Empty squares are not listed.
  * The format of each line depends on the capability level:
@@ -44,28 +52,25 @@ import kotlin.io.path.writeText
  *
  * ## Moving pieces
  *
- * Off by default. A board given an [actuation] rewrites the file when it is asked to move pieces,
- * which is the only thing "moving a piece" can mean for a board that is a file. It is opt-in
- * because the desktop demo drives this same file from its own on-screen board, and a board that
- * rewrote it underneath would be fighting the hand that feeds it.
+ * A board whose first line says it moves pieces rewrites the file when it is asked to, which is the
+ * only thing "moving a piece" can mean for a board that is a file. Whether it can is declared in
+ * the file rather than in code for the same reason the level is: the file is the board, and a
+ * board that changes between games should be one edit, not a rebuild. Whatever else displays the
+ * file has to read it back after the board has moved something, as the desktop client does.
  *
  * @param filePath Path to the board state file.
- * @param actuation What this board claims about moving pieces. Null means it only reads.
  */
-class FakeBoard(
-    private val filePath: Path,
-    private val actuation: BoardActuation? = null,
-) : BoardModule {
+class FakeBoard(private val filePath: Path) : BoardModule {
 
     private val _errors = MutableSharedFlow<BoardError>()
     override val errors: SharedFlow<BoardError> = _errors
 
     /**
-     * Returns the board's capability level, read from the first line of the file.
+     * Returns the board's capabilities, read from the first line of the file.
      */
     override suspend fun getCapabilities(): Result<BoardError, BoardCapabilities> {
         val parsed = readFile() ?: return Result.Failure(BoardError.NotReady(diagnostic = "the board file could not be read"))
-        return Result.Success(BoardCapabilities(parsed.level, actuation))
+        return Result.Success(BoardCapabilities(parsed.level, parsed.actuation))
     }
 
     /**
@@ -86,7 +91,9 @@ class FakeBoard(
      * and anything else editing it has as much right to be there as this does.
      */
     override suspend fun movePieces(transfers: List<PieceTransfer>): Result<BoardError, Unit> {
-        val actuation = this.actuation ?: return super.movePieces(transfers)
+        val parsed = readFile()
+            ?: return Result.Failure(BoardError.NotReady(diagnostic = "the board file could not be read"))
+        val actuation = parsed.actuation ?: return super.movePieces(transfers)
 
         // Refused whole rather than up to the offending transfer: a half-applied list leaves the
         // pieces in a position nobody can name.
@@ -97,9 +104,6 @@ class FakeBoard(
                 ))
             }
         }
-
-        val parsed = readFile()
-            ?: return Result.Failure(BoardError.NotReady(diagnostic = "the board file could not be read"))
 
         val squares = parsed.squares.toMutableMap()
         transfers.forEachIndexed { index, transfer ->
@@ -123,7 +127,7 @@ class FakeBoard(
         }
 
         return try {
-            filePath.writeText(render(parsed.level, squares))
+            filePath.writeText(render(parsed.level, parsed.actuation, squares))
             Result.Success(Unit)
         } catch (e: Exception) {
             Result.Failure(BoardError.ActuationFailed(
@@ -142,12 +146,14 @@ class FakeBoard(
 
         if (lines.isEmpty()) return null
 
-        val level = when (lines[0].trim().lowercase()) {
+        val header = lines[0].trim().lowercase().split("\\s+".toRegex())
+        val level = when (header[0]) {
             "full" -> BoardCapabilityLevel.FULL
             "color" -> BoardCapabilityLevel.COLOR
             "occupancy" -> BoardCapabilityLevel.OCCUPANCY
             else -> return null
         }
+        val actuation = (parseActuation(header.drop(1)) ?: return null).value
 
         val squares = mutableMapOf<String, SquareState>()
 
@@ -178,14 +184,33 @@ class FakeBoard(
             squares[square] = state
         }
 
-        return ParsedBoardFile(level, squares)
+        return ParsedBoardFile(level, actuation, squares)
     }
 
     private data class ParsedBoardFile(
         val level: BoardCapabilityLevel,
+        val actuation: BoardActuation?,
         val squares: Map<String, SquareState>,
     )
 }
+
+/**
+ * The words after the level on the first line, as what the board declares about moving pieces.
+ *
+ * Wrapped so that a board that only senses (an empty list) can be told from a first line that
+ * says something this parser does not know (null), which makes the whole file unreadable: a typo
+ * should surface as a board that will not answer, not as one that quietly never moves.
+ */
+private fun parseActuation(flags: List<String>): Optional<BoardActuation?>? {
+    if (flags.any { it != MOVES && it != PLACES }) return null
+    if (flags.isEmpty()) return Optional(null)
+    return Optional(BoardActuation(canPlacePieces = PLACES in flags))
+}
+
+private const val MOVES = "moves"
+private const val PLACES = "places"
+
+private data class Optional<T>(val value: T)
 
 /**
  * A placed piece as much of it as [level] can hold.
@@ -201,12 +226,20 @@ private fun occupiedBy(piece: Piece, level: BoardCapabilityLevel): SquareState =
 }
 
 /** The inverse of the parser above: the same file, with the pieces where they now stand. */
-private fun render(level: BoardCapabilityLevel, squares: Map<String, SquareState>): String {
-    val header = when (level) {
-        BoardCapabilityLevel.FULL -> "full"
-        BoardCapabilityLevel.COLOR -> "color"
-        BoardCapabilityLevel.OCCUPANCY -> "occupancy"
-    }
+private fun render(
+    level: BoardCapabilityLevel,
+    actuation: BoardActuation?,
+    squares: Map<String, SquareState>,
+): String {
+    val header = listOfNotNull(
+        when (level) {
+            BoardCapabilityLevel.FULL -> "full"
+            BoardCapabilityLevel.COLOR -> "color"
+            BoardCapabilityLevel.OCCUPANCY -> "occupancy"
+        },
+        MOVES.takeIf { actuation != null },
+        PLACES.takeIf { actuation?.canPlacePieces == true },
+    ).joinToString(" ")
     val occupied = squares.entries
         .filter { it.value !is SquareState.Empty }
         .sortedBy { it.key }
