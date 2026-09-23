@@ -51,3 +51,13 @@ directory:
 ├── smart-chess-desktop    # consumes it
 └── smart-chess-android    # consumes it (alongside simple-chess-kotlin)
 ```
+
+## License
+
+Copyright (C) 2026 Nacho de Gorostidi
+
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU
+General Public License as published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version. See [LICENSE](LICENSE) for the full text.
+
+The `engine-carballo` module links the [Carballo](https://github.com/albertoruibal/carballo) chess engine, which is licensed under the GPL-3.0, so the repository is distributed under the same license.
