@@ -567,8 +567,8 @@ class LichessAdapter(
         }
 
         val opponent = when (myColor) {
-            Color.WHITE -> game.black.name
-            Color.BLACK -> game.white.name
+            Color.WHITE -> game.black.displayName
+            Color.BLACK -> game.white.displayName
             else -> "Anonymous"
         }
 

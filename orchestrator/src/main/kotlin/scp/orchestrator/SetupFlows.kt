@@ -210,6 +210,7 @@ internal suspend fun Orchestrator.setupRemote() {
             boardLevel = boardCaps.level,
             boardActuation = boardCaps.actuation,
             remote = rem,
+            remoteUsername = configured.getOrNull()?.username,
         )
         startModuleCollectors(session!!)
         state = OrchestratorState.SeekingGame

@@ -36,6 +36,13 @@ data class GameSession(
     val initialFen: String? = null,
     val whiteName: String? = null,
     val blackName: String? = null,
+    /**
+     * Who the remote platform says we signed in as, or null where it does not say.
+     *
+     * Only a remote game has one, and it is known before the colours are: a seek is made under a
+     * name, but which side that name plays is the platform's to decide when the game starts.
+     */
+    val remoteUsername: String? = null,
     val engine: EngineAdapterModule? = null,
     val remote: RemoteAdapterModule? = null,
 )

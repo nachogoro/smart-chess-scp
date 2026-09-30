@@ -200,10 +200,15 @@ class Orchestrator(
         when (event) {
             is OrchestratorEvent.RemoteGameStarted -> {
                 val e = event.event
+                val ownName = session?.remoteUsername
+                val whiteName = if (e.color == Color.WHITE) ownName else e.opponent
+                val blackName = if (e.color == Color.WHITE) e.opponent else ownName
                 val createResult = gameController.create(CreateGameParams(
                     fen = e.fen,
                     timeControl = e.timeControl,
                     authority = Authority.EXTERNAL,
+                    whiteName = whiteName,
+                    blackName = blackName,
                 ))
                 when (createResult) {
                     is Result.Failure -> {
@@ -218,14 +223,16 @@ class Orchestrator(
                             playerColor = e.color,
                             timeControl = e.timeControl,
                             initialFen = e.fen,
+                            whiteName = whiteName,
+                            blackName = blackName,
                         )
                         notifyGameStarted(GameStartedInfo(
                             gameId = gameId,
                             mode = GameMode.REMOTE,
                             playerColor = e.color,
                             timeControl = e.timeControl,
-                            whiteName = null,
-                            blackName = null,
+                            whiteName = whiteName,
+                            blackName = blackName,
                             initialFen = e.fen,
                         ))
                         transitionToAwaitingMove()

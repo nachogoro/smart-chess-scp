@@ -610,4 +610,21 @@ class GameLifecycleTest {
 
         orchestrator.stop()
     }
+
+    @Test
+    fun `remote game names the signed-in user and the opponent by colour`() = runTest(UnconfinedTestDispatcher()) {
+        val orchestrator = startRemoteGame(playerColor = Color.BLACK)
+
+        val info = assertNotNull(ui.lastGameStartedInfo)
+        assertEquals("opp", info.whiteName)
+        assertEquals("testuser", info.blackName)
+
+        remote.emitGameEnded(RemoteGameEndedEvent(result = GameResult.BLACK_WINS, termination = Termination.Resignation))
+
+        val summary = assertNotNull(ui.lastGameSummary)
+        assertEquals("opp", summary.whiteName)
+        assertEquals("testuser", summary.blackName)
+
+        orchestrator.stop()
+    }
 }

@@ -346,6 +346,32 @@ class LichessAdapterTest {
     }
 
     @Test
+    fun `game against the Lichess engine names it by its level`() = runTest {
+        val api = FakeLichessApi()
+        val adapter = LichessAdapter(this, api)
+        configureAndSeek(api, adapter)
+        advanceUntilIdle()
+
+        val events = mutableListOf<GameStartedEvent>()
+        val collectJob = launch { adapter.gameStarted.collect { events.add(it) } }
+
+        api.eventStreamChannel.send(gameStartEvent("game1"))
+        advanceUntilIdle()
+
+        // The engine's side of a gameFull carries a level and nothing else.
+        api.gameStreamChannel.send(
+            """{"type":"gameFull","id":"game1","white":{"id":"testuser","name":"TestUser"},"black":{"aiLevel":3},""" +
+                """"initialFen":"startpos","state":{"type":"gameState","moves":"","status":"started"}}"""
+        )
+        advanceUntilIdle()
+
+        assertEquals("Stockfish: 3", events.single().opponent)
+
+        collectJob.cancel()
+        adapter.disconnect()
+    }
+
+    @Test
     fun `game start as black detects color correctly`() = runTest {
         val api = FakeLichessApi()
         val adapter = LichessAdapter(this, api)

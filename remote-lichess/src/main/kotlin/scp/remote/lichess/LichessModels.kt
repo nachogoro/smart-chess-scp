@@ -104,12 +104,24 @@ data class LichessVariant(
     val name: String = "Standard",
 )
 
-/** Player information within a game stream. */
+/**
+ * Player information within a game stream.
+ *
+ * @property aiLevel Set only for Lichess's own engine, which has a strength instead of an account
+ *   and so arrives with no [id] or [name].
+ */
 @Serializable
 data class LichessPlayer(
     val id: String? = null,
     val name: String = "Anonymous",
-)
+    val aiLevel: Int? = null,
+) {
+    /**
+     * What to call this player. The engine goes by the one Lichess runs and the level it plays at,
+     * with no words around them: this is a name, and a name is shown as it stands (PROTOCOL §2.6).
+     */
+    val displayName: String get() = aiLevel?.let { "Stockfish: $it" } ?: name
+}
 
 /**
  * Incremental game state update, sent after each move or status change (type `"gameState"`).
