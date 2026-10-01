@@ -2,9 +2,6 @@ package scp.orchestrator
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import scp.protocol.*
 
 class Orchestrator(
@@ -17,22 +14,11 @@ class Orchestrator(
     internal val eventChannel = Channel<OrchestratorEvent>(Channel.UNLIMITED)
     internal lateinit var scope: CoroutineScope
 
-    // State and session are backed by flows so a UI can observe them instead of polling.
-    // The plain properties remain the way the orchestrator itself reads and writes them,
-    // and stay available to callers that want a one-off snapshot.
-    private val _stateFlow = MutableStateFlow<OrchestratorState>(OrchestratorState.Idle)
-    val stateFlow: StateFlow<OrchestratorState> = _stateFlow.asStateFlow()
-
-    var state: OrchestratorState
-        get() = _stateFlow.value
-        internal set(value) { _stateFlow.value = value }
-
-    private val _sessionFlow = MutableStateFlow<GameSession?>(null)
-    val sessionFlow: StateFlow<GameSession?> = _sessionFlow.asStateFlow()
-
-    var session: GameSession?
-        get() = _sessionFlow.value
-        internal set(value) { _sessionFlow.value = value }
+    // Neither is visible outside this module. A UI learns about the game from the notifications
+    // the protocol sends it, and anything it could read here instead would be a channel no other
+    // implementation of the protocol has.
+    internal var state: OrchestratorState = OrchestratorState.Idle
+    internal var session: GameSession? = null
 
     internal var moduleCollectorJobs: List<Job> = emptyList()
 
@@ -266,12 +252,6 @@ class Orchestrator(
     internal suspend fun transitionToAwaitingMove() {
         val s = session ?: return
         val gameState = gameController.getState(s.gameId).getOrNull() ?: return
-
-        // Publish the position and the clocks the move produced.
-        session = s.copy(
-            fen = gameState.fen,
-            clocks = gameState.clocks ?: s.clocks,
-        )
 
         // A game that has already ended is not one to await a move in. Ending it is not this
         // method's to do, though: the game controller announces every ending on game.ended,
