@@ -79,3 +79,21 @@ data class GameStartedInfo(
     val blackName: String?,
     val initialFen: String,
 )
+
+/**
+ * A move the game controller accepted, whoever played it.
+ *
+ * Sent for every move, so that together with [GameStartedInfo] it is all a UI needs to follow the
+ * game: the side to move is in [fen], and whether that side is the local player follows from the
+ * mode and colour the game started with.
+ */
+data class MovePlayedInfo(
+    val gameId: String,
+    val move: String,
+    val san: String,
+    val fen: String,
+    /** Who played it. */
+    val color: Color,
+    /** Both clocks after the move, or null in an untimed game. */
+    val clocks: Clocks?,
+)

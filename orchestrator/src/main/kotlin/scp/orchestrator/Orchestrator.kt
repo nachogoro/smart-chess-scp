@@ -267,9 +267,7 @@ class Orchestrator(
         val s = session ?: return
         val gameState = gameController.getState(s.gameId).getOrNull() ?: return
 
-        // Publish the position and the clocks the move produced. This runs after every move
-        // whatever its source, which is why the position is carried here rather than alongside the
-        // notifications the UI receives: those cover the opponent's moves and not the player's own.
+        // Publish the position and the clocks the move produced.
         session = s.copy(
             fen = gameState.fen,
             clocks = gameState.clocks ?: s.clocks,

@@ -48,6 +48,7 @@ internal suspend fun Orchestrator.handleMoveReady() {
             return
         }
         is Result.Success -> {
+            announceMove(s, uci, gameState.turn, submitResult.value)
             if (s.mode == GameMode.REMOTE) {
                 // Hand the turn over locally at once, then send the move to the server in the
                 // background, so the clock switches to the opponent immediately rather than waiting
@@ -143,6 +144,7 @@ internal suspend fun Orchestrator.handleEngineMove() {
                     return
                 }
                 is Result.Success -> {
+                    announceMove(s, moveUci, gameState.turn, submitResult.value)
                     deliverOpponentMove(
                         s = s,
                         fenBefore = gameState.fen,
@@ -178,6 +180,7 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
             return
         }
         is Result.Success -> {
+            announceMove(s, event.move, before.turn, submitResult.value)
             deliverOpponentMove(
                 s = s,
                 fenBefore = before.fen,
@@ -188,6 +191,29 @@ internal suspend fun Orchestrator.handleRemoteOpponentMove(event: OpponentMoveEv
             transitionToAwaitingMove()
         }
     }
+}
+
+/**
+ * Tells the UI that the game controller accepted a move, whoever played it.
+ *
+ * Called before anything else is done about the move, so that whatever the UI hears about it next
+ * — that the board has played it, or that the server never got it — it hears over the position the
+ * move produced.
+ */
+private suspend fun Orchestrator.announceMove(
+    s: GameSession,
+    uci: String,
+    moverColor: Color,
+    submitted: SubmitMoveResult,
+) {
+    ui.onMovePlayed(MovePlayedInfo(
+        gameId = s.gameId,
+        move = uci,
+        san = submitted.san,
+        fen = submitted.fen,
+        color = moverColor,
+        clocks = submitted.clocks,
+    ))
 }
 
 /**
@@ -231,7 +257,6 @@ private suspend fun Orchestrator.deliverOpponentMove(
         san = submitted.san,
         fen = submitted.fen,
         color = moverColor,
-        clocks = submitted.clocks,
         isEnPassant = submitted.isEnPassant,
         boardUpdate = update,
     ))

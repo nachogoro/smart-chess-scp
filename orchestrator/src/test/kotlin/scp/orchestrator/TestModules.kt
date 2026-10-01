@@ -202,6 +202,13 @@ class FakeUIModule : UIModule {
     var lastGameStartedInfo: GameStartedInfo? = null
     var lastGameSummary: GameSummary? = null
     var lastOpponentMove: ShowOpponentMoveParams? = null
+    val movesPlayed = mutableListOf<MovePlayedInfo>()
+
+    /**
+     * Every notification in the order it arrived, by protocol method name, so a test can check
+     * what precedes what.
+     */
+    val notifications = mutableListOf<String>()
 
     /** Runs while the notification is up, so a test can act between it and whatever follows. */
     var onShowOpponentMove: ((ShowOpponentMoveParams) -> Unit)? = null
@@ -251,14 +258,22 @@ class FakeUIModule : UIModule {
 
     override suspend fun onGameStarted(info: GameStartedInfo) {
         lastGameStartedInfo = info
+        notifications += "ui.onGameStarted"
+    }
+
+    override suspend fun onMovePlayed(info: MovePlayedInfo) {
+        movesPlayed += info
+        notifications += "ui.onMovePlayed"
     }
 
     override suspend fun onGameEnded(summary: GameSummary) {
         lastGameSummary = summary
+        notifications += "ui.onGameEnded"
     }
 
     override suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit> {
         lastOpponentMove = params
+        notifications += "ui.showOpponentMove"
         onShowOpponentMove?.invoke(params)
         return Result.Success(Unit)
     }

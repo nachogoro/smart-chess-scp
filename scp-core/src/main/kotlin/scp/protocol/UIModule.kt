@@ -19,6 +19,7 @@ interface UIModule {
     // Notifications (one-way, no response expected)
     suspend fun onSeekingGame()
     suspend fun onGameStarted(info: GameStartedInfo)
+    suspend fun onMovePlayed(info: MovePlayedInfo)
     suspend fun onGameEnded(summary: GameSummary)
     suspend fun showOpponentMove(params: ShowOpponentMoveParams): Result<UIError, Unit>
     suspend fun displayError(message: UIMessage): Result<UIError, Unit>
@@ -96,7 +97,6 @@ data class ShowOpponentMoveParams(
     val fen: String,
     /** The colour the opponent was playing, so a UI can say whose move it is showing. */
     val color: Color,
-    val clocks: Clocks?,
     /** See [SubmitMoveResult.isEnPassant]: the player must clear a square the move does not name. */
     val isEnPassant: Boolean = false,
     /** What the player still has to do to the physical board, if anything. */

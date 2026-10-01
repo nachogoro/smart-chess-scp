@@ -105,12 +105,11 @@ class MoveHandlingTest {
     }
 
     @Test
-    fun `session carries the position after the player's own move`() = runTest(UnconfinedTestDispatcher()) {
-        // Nothing notifies the UI of a move the player made themselves, so a UI drawing the
-        // position has only the session to read it from.
+    fun `the UI is told of the player's own move`() = runTest(UnconfinedTestDispatcher()) {
+        // No ui.showOpponentMove is sent for it, so this is the only way a UI drawing the position
+        // hears of it.
         val orchestrator = startLocalGame()
         val gameId = orchestrator.session!!.gameId
-        assertEquals(startFen, orchestrator.session!!.fen)
 
         board.boardState = boardStateFromFen(
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
@@ -121,9 +120,17 @@ class MoveHandlingTest {
         // No en passant target in the result: the rules library records one only where a capture
         // could actually use it, and after 1.e4 no black pawn can.
         assertEquals(
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
-            orchestrator.session!!.fen,
+            listOf(MovePlayedInfo(
+                gameId = gameId,
+                move = "e2e4",
+                san = "e4",
+                fen = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1",
+                color = Color.WHITE,
+                clocks = null,
+            )),
+            ui.movesPlayed,
         )
+        assertNull(ui.lastOpponentMove)
 
         orchestrator.stop()
     }
@@ -176,6 +183,7 @@ class MoveHandlingTest {
         ui.emitMoveReady(gameId)
 
         assertEquals("NOT_YOUR_TURN", assertIs<UIMessage.MoveRejected>(ui.lastError).error.code)
+        assertTrue(ui.movesPlayed.isEmpty())
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -207,6 +215,7 @@ class MoveHandlingTest {
         ui.emitMoveReady(gameId)
 
         assertEquals("e2e4", remote.lastSentMove)
+        assertEquals(listOf("e2e4"), ui.movesPlayed.map { it.move })
         assertIs<OrchestratorState.AwaitingOpponentMove>(orchestrator.state)
 
         orchestrator.stop()
@@ -232,6 +241,15 @@ class MoveHandlingTest {
         // After player moves, engine should move automatically
         assertNotNull(ui.lastOpponentMove)
         assertEquals("e7e5", ui.lastOpponentMove!!.move)
+
+        // Both moves are announced, each as soon as it is accepted, and the engine's before the
+        // player is asked to make it on the board.
+        assertEquals(listOf("e2e4", "e7e5"), ui.movesPlayed.map { it.move })
+        assertEquals(listOf(Color.WHITE, Color.BLACK), ui.movesPlayed.map { it.color })
+        assertEquals(
+            listOf("ui.onGameStarted", "ui.onMovePlayed", "ui.onMovePlayed", "ui.showOpponentMove"),
+            ui.notifications,
+        )
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
         assertEquals(Color.WHITE, (orchestrator.state as OrchestratorState.AwaitingPlayerMove).color)
 
@@ -345,6 +363,11 @@ class MoveHandlingTest {
         assertEquals("e2e4", gc.lastSubmittedMove!!.move)
         assertNotNull(ui.lastOpponentMove)
         assertEquals("e2e4", ui.lastOpponentMove!!.move)
+        assertEquals(Color.WHITE, ui.movesPlayed.single().color)
+        assertEquals(
+            listOf("ui.onMovePlayed", "ui.showOpponentMove"),
+            ui.notifications.takeLast(2),
+        )
         assertIs<OrchestratorState.AwaitingPlayerMove>(orchestrator.state)
 
         orchestrator.stop()

@@ -170,6 +170,32 @@ class IntegrationTest {
     }
 
     @Test
+    fun `the move that ends a game is announced before the ending`() = runTest(UnconfinedTestDispatcher()) {
+        // A UI following the game from its events must have the final position before it is told
+        // the game is over, or it shows the ending over the position before the mate.
+        val f = startGame()
+
+        f.playFromBoard("f2f3")
+        f.playFromBoard("e7e5")
+        f.playFromBoard("g2g4")
+        f.playFromBoard("d8h4")
+
+        assertEquals(listOf("f2f3", "e7e5", "g2g4", "d8h4"), f.ui.movesPlayed.map { it.move })
+        assertEquals(
+            listOf(Color.WHITE, Color.BLACK, Color.WHITE, Color.BLACK),
+            f.ui.movesPlayed.map { it.color },
+        )
+        assertEquals("Qh4#", f.ui.movesPlayed.last().san)
+        assertEquals(assertNotNull(f.ui.lastGameSummary).finalFen, f.ui.movesPlayed.last().fen)
+        assertEquals(
+            listOf("ui.onMovePlayed", "ui.onGameEnded"),
+            f.ui.notifications.takeLast(2),
+        )
+
+        f.orchestrator.stop()
+    }
+
+    @Test
     fun `a game played to stalemate is reported as stalemate`() = runTest(UnconfinedTestDispatcher()) {
         val f = startGame()
 
@@ -309,6 +335,8 @@ class IntegrationTest {
         val state = assertIs<Result.Success<GameState>>(f.controller.getState(f.gameId))
         assertEquals(300_000 - 10_000 + 2_000, state.value.clocks?.whiteMs)
         assertEquals(300_000, state.value.clocks?.blackMs)
+        // The UI is given the same clocks with the move, which is the only way it hears of them.
+        assertEquals(state.value.clocks, f.ui.movesPlayed.single().clocks)
 
         f.orchestrator.stop()
     }
